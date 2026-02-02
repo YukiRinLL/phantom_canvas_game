@@ -618,11 +618,11 @@ var render = function () {
 			ctx.scale(-1, 1);
 			var scale = 52 / 70;
 			var cropY = (70 - 60/scale) / 2;
-			ctx.drawImage(heroImage, 22, 18, 52, 60, -26, 0, 52, 60);
+			ctx.drawImage(heroImage, 0, cropY, 70, 70 - cropY*2, -26, 0, 52, 60);
 		} else {
 			var scale = 52 / 70;
 			var cropY = (70 - 60/scale) / 2;
-			ctx.drawImage(heroImage, 22, 18, 52, 60, hero.x, hero.y, 52, 60);
+			ctx.drawImage(heroImage, 0, cropY, 70, 70 - cropY*2, hero.x, hero.y, 52, 60);
 		}
 		ctx.restore();
 		ctx.globalAlpha = 1;
