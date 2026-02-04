@@ -11,7 +11,7 @@ var bgImage = new Image();
 bgImage.onload = function () {
 	bgReady = true;
 };
-bgImage.src = "images/background.png";
+bgImage.src = "images/church-close.png";
 
 // Game objects
 var chatMessages = [];
@@ -580,7 +580,7 @@ var update = function (modifier) {
 // Draw everything
 var render = function () {
 	if (bgReady) {
-		ctx.drawImage(bgImage, 0, 0);
+		ctx.drawImage(bgImage, 0, 0, 512, 480);
 	}
 
 	// Draw characters first
