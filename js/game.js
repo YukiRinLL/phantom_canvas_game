@@ -10,39 +10,42 @@ var bgReady = false;
 var bgImage = new Image();
 bgImage.onload = function () {
 	bgReady = true;
-	console.log("✓ Loaded close background image from local");
+	console.log("✓ Loaded close background image");
 };
 bgImage.onerror = function () {
-	console.log("✗ Failed to load local church-close.png");
+	console.log("✗ Failed to load remote church-close.png, falling back to local");
+	bgImage.src = "images/church-close.png";
 };
-console.log("Loading close background from local file...");
-bgImage.src = "images/church-close.png";
+console.log("Loading close background from remote URL...");
+bgImage.src = "https://dlink.host/wx3.sinaimg.cn/large/006fhRoTly8i9ykaj3dcsj30u00u00xc.jpg";
 
 // Far background image
 var bgFarReady = false;
 var bgFarImage = new Image();
 bgFarImage.onload = function () {
 	bgFarReady = true;
-	console.log("✓ Loaded far background image from local");
+	console.log("✓ Loaded far background image");
 };
 bgFarImage.onerror = function () {
-	console.log("✗ Failed to load local church-far.png");
+	console.log("✗ Failed to load remote church-far.png, falling back to local");
+	bgFarImage.src = "images/church-far.png";
 };
-console.log("Loading far background from local file...");
-bgFarImage.src = "images/church-far.png";
+console.log("Loading far background from remote URL...");
+bgFarImage.src = "https://dlink.host/wx1.sinaimg.cn/large/006fhRoTly8i9ykaqhl08j30u00u0n2m.jpg";
 
 // Far foreground image (blocks)
 var bgFarBlockReady = false;
 var bgFarBlockImage = new Image();
 bgFarBlockImage.onload = function () {
 	bgFarBlockReady = true;
-	console.log("✓ Loaded far block image from local");
+	console.log("✓ Loaded far block image");
 };
 bgFarBlockImage.onerror = function () {
-	console.log("✗ Failed to load local church-far-block.png");
+	console.log("✗ Failed to load remote church-far-block.png, falling back to local");
+	bgFarBlockImage.src = "images/church-far-block.png";
 };
-console.log("Loading far block from local file...");
-bgFarBlockImage.src = "images/church-far-block.png";
+console.log("Loading far block from remote URL...");
+bgFarBlockImage.src = "https://dlink.host/wx2.sinaimg.cn/large/006fhRoTly8i9ykabqw4nj30u00u0t9h.jpg";
 
 // Scene management
 var currentScene = "close"; // "close" or "far"
