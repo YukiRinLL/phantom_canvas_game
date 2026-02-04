@@ -751,11 +751,18 @@ var update = function (modifier) {
 
 // Draw everything
 var render = function () {
+	// Clear canvas first
+	ctx.clearRect(0, 0, canvas.width, canvas.height);
+	
 	// Draw background
 	if (currentScene === "close" && bgReady) {
 		ctx.drawImage(bgImage, 0, 0, 512, 480);
 	} else if (currentScene === "far" && bgFarReady) {
 		ctx.drawImage(bgFarImage, 0, 0, 512, 480);
+	} else {
+		// Fallback: fill with black if no background ready
+		ctx.fillStyle = "black";
+		ctx.fillRect(0, 0, canvas.width, canvas.height);
 	}
 
 	// Draw characters first (only in close scene)
