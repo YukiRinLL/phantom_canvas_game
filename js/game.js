@@ -5,27 +5,41 @@ canvas.width = 512;
 canvas.height = 480;
 document.body.appendChild(canvas);
 
-// Create debug mode toggle button
-var debugButton = document.createElement("button");
-debugButton.innerHTML = "Debug Mode: ON";
-debugButton.style.position = "absolute";
-debugButton.style.top = "10px";
-debugButton.style.left = "10px";
-debugButton.style.padding = "5px 10px";
-debugButton.style.fontSize = "12px";
-debugButton.style.backgroundColor = "#333";
-debugButton.style.color = "white";
-debugButton.style.border = "1px solid #666";
-debugButton.style.borderRadius = "3px";
-debugButton.style.cursor = "pointer";
-document.body.appendChild(debugButton);
+// Debug mode keyboard toggle (F12 key)
+addEventListener("keydown", function (e) {
+	if (e.keyCode === 123) { // F12 key
+		e.preventDefault(); // Prevent default browser action (dev tools)
+		debugMode = !debugMode;
+		console.log("Debug mode " + (debugMode ? "enabled" : "disabled"));
+		// Show debug mode status on screen briefly
+		showDebugStatus("Debug Mode: " + (debugMode ? "ON" : "OFF"));
+	}
+}, false);
 
-// Add event listener for debug button
-debugButton.addEventListener("click", function() {
-	debugMode = !debugMode;
-	debugButton.innerHTML = "Debug Mode: " + (debugMode ? "ON" : "OFF");
-	console.log("Debug mode " + (debugMode ? "enabled" : "disabled"));
-});
+// Function to show debug status message
+function showDebugStatus(message) {
+	// Create temporary status element
+	var statusElement = document.createElement("div");
+	statusElement.innerHTML = message;
+	statusElement.style.position = "absolute";
+	statusElement.style.top = "10px";
+	statusElement.style.left = "10px";
+	statusElement.style.padding = "5px 10px";
+	statusElement.style.fontSize = "12px";
+	statusElement.style.backgroundColor = "#333";
+	statusElement.style.color = "white";
+	statusElement.style.border = "1px solid #666";
+	statusElement.style.borderRadius = "3px";
+	statusElement.style.zIndex = "1000";
+	document.body.appendChild(statusElement);
+	
+	// Remove element after 2 seconds
+	setTimeout(function() {
+		if (statusElement.parentNode) {
+			statusElement.parentNode.removeChild(statusElement);
+		}
+	}, 2000);
+}
 
 // Background image
 var bgReady = false;
