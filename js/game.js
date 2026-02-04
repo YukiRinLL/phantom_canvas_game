@@ -5,6 +5,28 @@ canvas.width = 512;
 canvas.height = 480;
 document.body.appendChild(canvas);
 
+// Create debug mode toggle button
+var debugButton = document.createElement("button");
+debugButton.innerHTML = "Debug Mode: ON";
+debugButton.style.position = "absolute";
+debugButton.style.top = "10px";
+debugButton.style.left = "10px";
+debugButton.style.padding = "5px 10px";
+debugButton.style.fontSize = "12px";
+debugButton.style.backgroundColor = "#333";
+debugButton.style.color = "white";
+debugButton.style.border = "1px solid #666";
+debugButton.style.borderRadius = "3px";
+debugButton.style.cursor = "pointer";
+document.body.appendChild(debugButton);
+
+// Add event listener for debug button
+debugButton.addEventListener("click", function() {
+	debugMode = !debugMode;
+	debugButton.innerHTML = "Debug Mode: " + (debugMode ? "ON" : "OFF");
+	console.log("Debug mode " + (debugMode ? "enabled" : "disabled"));
+});
+
 // Background image
 var bgReady = false;
 var bgImage = new Image();
@@ -41,11 +63,9 @@ bgFarBlockImage.onload = function () {
 	console.log("✓ Loaded far block image");
 };
 bgFarBlockImage.onerror = function () {
-	console.log("✗ Failed to load remote church-far-block.png, falling back to local");
-	bgFarBlockImage.src = "images/church-far-block.png";
+	console.log("✗ Failed to load church-far-block.png");
 };
-console.log("Loading far block from remote URL...");
-bgFarBlockImage.src = "https://dlink.host/wx2.sinaimg.cn/large/006fhRoTly8i9ykabqw4nj30u00u0t9h.jpg";
+bgFarBlockImage.src = "images/church-far-block.png";
 
 // Scene management
 var currentScene = "close"; // "close" or "far"
@@ -487,22 +507,22 @@ var update = function (modifier) {
 	// Store original position for collision detection
 	var originalX = hero.x;
 	var originalY = hero.y;
-	
-	if (38 in keysDown) { // Player holding up
+
+	if (38 in keysDown || 87 in keysDown) { // Player holding up (arrow up or W)
 		hero.y = Math.max(wallSize, hero.y - hero.speed * modifier);
 	}
-	if (40 in keysDown) { // Player holding down
+	if (40 in keysDown || 83 in keysDown) { // Player holding down (arrow down or S)
 		hero.y = Math.min(canvas.height - wallSize - heroHeight, hero.y + hero.speed * modifier);
 	}
-	if (37 in keysDown) { // Player holding left
+	if (37 in keysDown || 65 in keysDown) { // Player holding left (arrow left or A)
 		hero.x = Math.max(wallSize, hero.x - hero.speed * modifier);
 		hero.facingRight = false; // Face left
 	}
-	if (39 in keysDown) { // Player holding right
+	if (39 in keysDown || 68 in keysDown) { // Player holding right (arrow right or D)
 		hero.x = Math.min(canvas.width - wallSize - heroWidth, hero.x + hero.speed * modifier);
 		hero.facingRight = true; // Face right
 	}
-	
+
 	// Check wall collision and revert if collision
 	if (checkWallCollision(hero.x, hero.y, heroWidth, heroHeight)) {
 		// Revert to original position
