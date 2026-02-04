@@ -49,8 +49,7 @@ bgImage.onload = function () {
 	console.log("✓ Loaded close background image");
 };
 bgImage.onerror = function () {
-	console.log("✗ Failed to load remote church-close.png, falling back to local");
-	bgImage.src = "images/church-close.png";
+	console.log("✗ Failed to load remote church-close.png");
 };
 console.log("Loading close background from remote URL...");
 bgImage.src = "https://dlink.host/wx3.sinaimg.cn/large/006fhRoTly8i9ykaj3dcsj30u00u00xc.jpg";
@@ -63,8 +62,7 @@ bgFarImage.onload = function () {
 	console.log("✓ Loaded far background image");
 };
 bgFarImage.onerror = function () {
-	console.log("✗ Failed to load remote church-far.png, falling back to local");
-	bgFarImage.src = "images/church-far.png";
+	console.log("✗ Failed to load remote church-far.png");
 };
 console.log("Loading far background from remote URL...");
 bgFarImage.src = "https://dlink.host/wx1.sinaimg.cn/large/006fhRoTly8i9ykaqhl08j30u00u0n2m.jpg";
@@ -74,11 +72,12 @@ var bgFarBlockReady = false;
 var bgFarBlockImage = new Image();
 bgFarBlockImage.onload = function () {
 	bgFarBlockReady = true;
-	console.log("✓ Loaded far block image");
+	console.log("✓ Loaded far block image from local");
 };
 bgFarBlockImage.onerror = function () {
-	console.log("✗ Failed to load church-far-block.png");
+	console.log("✗ Failed to load local church-far-block.png");
 };
+console.log("Loading far block from local file...");
 bgFarBlockImage.src = "images/church-far-block.png";
 
 // Scene management
