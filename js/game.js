@@ -26,13 +26,13 @@ var currentScene = "close"; // "close" or "far"
 var sceneTransitioning = false; // Prevent multiple transitions at once
 var sceneBoundaries = {
 	close: {
-		bottom: 350 // When hero reaches y > 350 in close scene, switch to far
+		bottom: 380 // When hero reaches y > 380 in close scene, switch to far
 	},
 	far: {
 		top: 180,
-		bottom: 300,
-		left: 180,
-		rirht: 300
+		bottom: 280,
+		left: 160,
+		rirht: 320
 	}
 };
 
