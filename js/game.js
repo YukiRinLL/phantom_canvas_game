@@ -10,7 +10,12 @@ var bgReady = false;
 var bgImage = new Image();
 bgImage.onload = function () {
 	bgReady = true;
+	console.log("✓ Loaded close background image from local");
 };
+bgImage.onerror = function () {
+	console.log("✗ Failed to load local church-close.png");
+};
+console.log("Loading close background from local file...");
 bgImage.src = "images/church-close.png";
 
 // Far background image
@@ -18,7 +23,12 @@ var bgFarReady = false;
 var bgFarImage = new Image();
 bgFarImage.onload = function () {
 	bgFarReady = true;
+	console.log("✓ Loaded far background image from local");
 };
+bgFarImage.onerror = function () {
+	console.log("✗ Failed to load local church-far.png");
+};
+console.log("Loading far background from local file...");
 bgFarImage.src = "images/church-far.png";
 
 // Far foreground image (blocks)
@@ -26,7 +36,12 @@ var bgFarBlockReady = false;
 var bgFarBlockImage = new Image();
 bgFarBlockImage.onload = function () {
 	bgFarBlockReady = true;
+	console.log("✓ Loaded far block image from local");
 };
+bgFarBlockImage.onerror = function () {
+	console.log("✗ Failed to load local church-far-block.png");
+};
+console.log("Loading far block from local file...");
 bgFarBlockImage.src = "images/church-far-block.png";
 
 // Scene management
@@ -43,6 +58,9 @@ var sceneBoundaries = {
 		right: 280
 	}
 };
+
+// Debug mode
+var debugMode = true; // Set to true for debug info
 
 // Wall collision detection
 var walls = {
@@ -754,15 +772,61 @@ var render = function () {
 	// Clear canvas first
 	ctx.clearRect(0, 0, canvas.width, canvas.height);
 	
-	// Draw background
-	if (currentScene === "close" && bgReady) {
-		ctx.drawImage(bgImage, 0, 0, 512, 480);
-	} else if (currentScene === "far" && bgFarReady) {
-		ctx.drawImage(bgFarImage, 0, 0, 512, 480);
-	} else {
-		// Fallback: fill with black if no background ready
+	// Draw background with loading handling
+	var backgroundDrawn = false;
+	if (currentScene === "close") {
+		if (bgReady) {
+			ctx.drawImage(bgImage, 0, 0, 512, 480);
+			backgroundDrawn = true;
+		} else {
+			// Force black background if close image not ready
+			ctx.fillStyle = "black";
+			ctx.fillRect(0, 0, canvas.width, canvas.height);
+			
+			// Draw loading text
+			ctx.fillStyle = "white";
+			ctx.font = "16px Arial";
+			ctx.textAlign = "center";
+			ctx.textBaseline = "middle";
+			ctx.fillText("Loading...", canvas.width / 2, canvas.height / 2);
+		}
+	} else if (currentScene === "far") {
+		console.log("Rendering far scene - bgFarReady:", bgFarReady, "bgFarBlockReady:", bgFarBlockReady);
+		if (bgFarReady) {
+			ctx.drawImage(bgFarImage, 0, 0, 512, 480);
+			backgroundDrawn = true;
+		} else {
+			// Force black background if far image not ready
+			console.log("Far background not ready, filling with black");
+			ctx.fillStyle = "black";
+			ctx.fillRect(0, 0, canvas.width, canvas.height);
+			
+			// Draw loading text
+			ctx.fillStyle = "white";
+			ctx.font = "16px Arial";
+			ctx.textAlign = "center";
+			ctx.textBaseline = "middle";
+			ctx.fillText("Loading far scene...", canvas.width / 2, canvas.height / 2);
+		}
+	}
+	
+	// Ensure black background if no background drawn
+	if (!backgroundDrawn) {
+		console.log("No background drawn, filling with black");
 		ctx.fillStyle = "black";
 		ctx.fillRect(0, 0, canvas.width, canvas.height);
+	}
+	
+	// Draw debug info for image loading
+	if (debugMode) {
+		ctx.fillStyle = "white";
+		ctx.font = "10px Arial";
+		ctx.textAlign = "left";
+		ctx.textBaseline = "top";
+		ctx.fillText("Image Status:", 10, 70);
+		ctx.fillText("Close: " + (bgReady ? "✓" : "✗"), 10, 85);
+		ctx.fillText("Far: " + (bgFarReady ? "✓" : "✗"), 10, 100);
+		ctx.fillText("Block: " + (bgFarBlockReady ? "✓" : "✗"), 10, 115);
 	}
 
 	// Draw characters first (only in close scene)
@@ -810,6 +874,18 @@ var render = function () {
 		}
 		ctx.restore();
 		ctx.globalAlpha = 1;
+		
+		// Draw debug info for hero
+		if (debugMode) {
+			ctx.fillStyle = "white";
+			ctx.font = "12px Arial";
+			ctx.textAlign = "left";
+			ctx.textBaseline = "top";
+			ctx.fillText("Hero: x=" + Math.round(hero.x) + ", y=" + Math.round(hero.y), 10, 10);
+			ctx.fillText("Scene: " + currentScene, 10, 25);
+			ctx.fillText("HeroReady: " + heroReady, 10, 40);
+			ctx.fillText("HeroAlpha: " + hero.alpha, 10, 55);
+		}
 	}
 
 	// Draw far foreground blocks (only in far scene)
