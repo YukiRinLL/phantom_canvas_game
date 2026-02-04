@@ -390,14 +390,27 @@ function updateCharacters() {
 						
 						// Generate NPC position that doesn't collide with walls
 						var npcX, npcY;
-						var maxAttempts = 20; // Maximum attempts to find a valid position
+						var maxAttempts = 50; // Increased attempts for better positioning
 						var attempts = 0;
 						var validPosition = false;
 						
 						while (!validPosition && attempts < maxAttempts) {
-							// Generate random position within bounds
-							npcX = wallSize + (Math.random() * (canvas.width - wallSize * 2 - charWidth));
-							npcY = wallSize + (Math.random() * (canvas.height - wallSize * 2 - charHeight));
+							// Generate random position within scene-specific bounds
+							// For close scene: avoid top wall area
+							if (currentScene === "close") {
+								// Bottom 4/5 of screen (avoid top wall)
+								npcX = 32 + (Math.random() * (canvas.width - 64 - charWidth));
+								npcY = canvas.height / 5 + 32 + (Math.random() * (canvas.height * 4/5 - 64 - charHeight));
+							} else { // far scene
+								// Avoid the church area (walls.far[0])
+								do {
+									npcX = 32 + (Math.random() * (canvas.width - 64 - charWidth));
+									npcY = 32 + (Math.random() * (canvas.height - 64 - charHeight));
+								} while (
+									npcY >= 200 && npcY <= 250 && 
+									npcX >= 190 && npcX <= 320
+								);
+							}
 							
 							// Check if position collides with walls
 							if (!checkWallCollision(npcX, npcY, charWidth, charHeight)) {
@@ -407,10 +420,17 @@ function updateCharacters() {
 							attempts++;
 						}
 						
-						// If no valid position found after max attempts, use a default safe position
+						// If no valid position found after max attempts, use a scene-specific safe position
 						if (!validPosition) {
-							npcX = canvas.width / 2 - charWidth / 2;
-							npcY = canvas.height / 2 - charHeight / 2;
+							if (currentScene === "close") {
+								// Safe position in close scene (bottom area)
+								npcX = canvas.width / 2 - charWidth / 2;
+								npcY = canvas.height * 3/4 - charHeight / 2;
+							} else {
+								// Safe position in far scene (avoiding church area)
+								npcX = 100;
+								npcY = canvas.height / 2 - charHeight / 2;
+							}
 						}
 						
 						characters[userId] = {
@@ -783,6 +803,8 @@ var update = function (modifier) {
 			currentScene = "far";
 			// Reset hero position to top of far scene (above transition area)
 			hero.y = 300; // Top of screen
+			// Update NPC positions for new scene
+			updateNPCPositionsForScene();
 			// Reset transition flag after a short delay
 			setTimeout(function() {
 				sceneTransitioning = false;
@@ -795,12 +817,70 @@ var update = function (modifier) {
 			currentScene = "close";
 			// Reset hero position to bottom of close scene (above transition area)
 			hero.y = 350; // Just above the bottom boundary
+			// Update NPC positions for new scene
+			updateNPCPositionsForScene();
 			// Reset transition flag after a short delay
 			setTimeout(function() {
 				sceneTransitioning = false;
 			}, 500);
 		}
 	}
+
+// Update NPC positions when scene changes
+function updateNPCPositionsForScene() {
+	var charWidth = 52;
+	var charHeight = 60;
+	
+	for (var userId in characters) {
+		var character = characters[userId];
+		var maxAttempts = 30;
+		var attempts = 0;
+		var validPosition = false;
+		var newX, newY;
+		
+		while (!validPosition && attempts < maxAttempts) {
+			// Generate scene-specific position
+			if (currentScene === "close") {
+				// Bottom 4/5 of screen (avoid top wall)
+				newX = 32 + (Math.random() * (canvas.width - 64 - charWidth));
+				newY = canvas.height / 5 + 32 + (Math.random() * (canvas.height * 4/5 - 64 - charHeight));
+			} else { // far scene
+				// Avoid the church area (walls.far[0])
+				do {
+					newX = 32 + (Math.random() * (canvas.width - 64 - charWidth));
+					newY = 32 + (Math.random() * (canvas.height - 64 - charHeight));
+				} while (
+					newY >= 200 && newY <= 250 && 
+					newX >= 190 && newX <= 320
+				);
+			}
+			
+			// Check if position collides with walls
+			if (!checkWallCollision(newX, newY, charWidth, charHeight)) {
+				validPosition = true;
+			}
+			
+			attempts++;
+		}
+		
+		// If no valid position found, use scene-specific safe position
+		if (!validPosition) {
+			if (currentScene === "close") {
+				newX = canvas.width / 2 - charWidth / 2;
+				newY = canvas.height * 3/4 - charHeight / 2;
+			} else {
+				newX = 100;
+				newY = canvas.height / 2 - charHeight / 2;
+			}
+		}
+		
+		// Update NPC position
+		character.x = newX;
+		character.y = newY;
+		// Reset movement parameters
+		delete character.movement;
+	}
+}
 };
 
 // Draw everything
