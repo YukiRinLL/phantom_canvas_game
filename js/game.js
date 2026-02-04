@@ -80,23 +80,93 @@ bgFarBlockImage.onerror = function () {
 console.log("Loading far block from local file...");
 bgFarBlockImage.src = "images/church-far-block.png";
 
+// Indoor scene image
+var bgIndoorReady = false;
+var bgIndoorImage = new Image();
+bgIndoorImage.onload = function () {
+	bgIndoorReady = true;
+	console.log("✓ Loaded indoor scene image from local");
+};
+bgIndoorImage.onerror = function () {
+	console.log("✗ Failed to load local church-indoor.png");
+};
+console.log("Loading indoor scene from local file...");
+bgIndoorImage.src = "images/church-indoor.png";
+
 // Scene management
-var currentScene = "close"; // "close" or "far"
+var currentScene = "close"; // "close", "far", or "indoor"
 var sceneTransitioning = false; // Prevent multiple transitions at once
 var sceneBoundaries = {
 	close: {
-		bottom: 380 // When hero reaches y > 380 in close scene, switch to far
+		bottom: 380, // When hero reaches y > 380 in close scene, switch to far
+		top: {
+			top: 0,
+			bottom: 100, // Top area for indoor transition
+			left: 200, // Center-left boundary
+			right: 300 // Center-right boundary
+		}
 	},
 	far: {
 		top: 250,
 		bottom: 280,
 		left: 210,
 		right: 280
+	},
+	indoor: {
+		bottom: 850, // Bottom area to return to close scene
+		left: 170,
+		right: 280,
+		// Indoor scene dimensions (for scrolling)
+		width: 512,  // Original image width
+		height: 960  // Original image height (assuming it's twice the canvas height)
 	}
 };
 
+// Camera/viewport management for scrolling scene
+var camera = {
+	x: 0,
+	y: 0,
+	// Camera bounds based on scene
+	bounds: {
+		left: 0,
+		right: 0,
+		top: 0,
+		bottom: 0
+	}
+};
+
+// Zoom level for indoor scene (can be adjusted manually)
+var indoorZoom = 1.0;
+
 // Debug mode
 var debugMode = true; // Set to true for debug info
+
+// Update camera bounds based on current scene
+function updateCameraBounds() {
+	if (currentScene === "indoor") {
+		// Calculate camera bounds for indoor scene
+		var scaledWidth = sceneBoundaries.indoor.width * indoorZoom;
+		var scaledHeight = sceneBoundaries.indoor.height * indoorZoom;
+		
+		camera.bounds.left = 0;
+		camera.bounds.right = scaledWidth - canvas.width;
+		camera.bounds.top = 0;
+		camera.bounds.bottom = scaledHeight - canvas.height;
+	}
+}
+
+// Update camera position to follow hero
+function updateCamera() {
+	if (currentScene === "indoor") {
+		// Calculate target camera position to center hero
+		var targetX = (hero.x + 26) * indoorZoom - canvas.width / 2;
+		var targetY = (hero.y + 30) * indoorZoom - canvas.height / 2;
+		
+		// Clamp camera position to bounds
+		camera.x = Math.max(camera.bounds.left, Math.min(camera.bounds.right, targetX));
+		camera.y = Math.max(camera.bounds.top, Math.min(camera.bounds.bottom, targetY));
+	}
+}
 
 // Wall collision detection
 var walls = {
@@ -119,6 +189,33 @@ var walls = {
 		}
 		// Add more walls as needed
 		// ...
+	],
+	indoor: [
+		// Indoor scene walls - boundary walls based on actual scene dimensions
+		{
+			top: 0,
+			bottom: 32,
+			left: 0,
+			right: sceneBoundaries.indoor.width
+		},
+		{
+			top: 0,
+			bottom: sceneBoundaries.indoor.height,
+			left: 0,
+			right: 32
+		},
+		{
+			top: 0,
+			bottom: sceneBoundaries.indoor.height,
+			left: sceneBoundaries.indoor.width - 32,
+			right: sceneBoundaries.indoor.width
+		},
+		{
+			top: sceneBoundaries.indoor.height - 32,
+			bottom: sceneBoundaries.indoor.height,
+			left: 0,
+			right: sceneBoundaries.indoor.width
+		}
 	]
 };
 
@@ -398,19 +495,15 @@ function updateCharacters() {
 							// Generate random position within scene-specific bounds
 							// For close scene: avoid top wall area
 							if (currentScene === "close") {
-								// Bottom 4/5 of screen (avoid top wall)
-								npcX = 32 + (Math.random() * (canvas.width - 64 - charWidth));
-								npcY = canvas.height / 5 + 32 + (Math.random() * (canvas.height * 4/5 - 64 - charHeight));
-							} else { // far scene
-								// Avoid the church area (walls.far[0])
-								do {
-									npcX = 32 + (Math.random() * (canvas.width - 64 - charWidth));
-									npcY = 32 + (Math.random() * (canvas.height - 64 - charHeight));
-								} while (
-									npcY >= 200 && npcY <= 250 && 
-									npcX >= 190 && npcX <= 320
-								);
-							}
+					// Bottom 4/5 of screen (avoid top wall)
+					npcX = 32 + (Math.random() * (canvas.width - 64 - charWidth));
+					npcY = canvas.height / 5 + 32 + (Math.random() * (canvas.height * 4/5 - 64 - charHeight));
+				} else if (currentScene === "far" || currentScene === "indoor") {
+					// Far and indoor scenes - no NPCs
+					npcX = -100; // Off-screen position
+					npcY = -100; // Off-screen position
+					validPosition = true; // Skip collision check
+				}
 							
 							// Check if position collides with walls
 							if (!checkWallCollision(npcX, npcY, charWidth, charHeight)) {
@@ -423,14 +516,14 @@ function updateCharacters() {
 						// If no valid position found after max attempts, use a scene-specific safe position
 						if (!validPosition) {
 							if (currentScene === "close") {
-								// Safe position in close scene (bottom area)
-								npcX = canvas.width / 2 - charWidth / 2;
-								npcY = canvas.height * 3/4 - charHeight / 2;
-							} else {
-								// Safe position in far scene (avoiding church area)
-								npcX = 100;
-								npcY = canvas.height / 2 - charHeight / 2;
-							}
+					// Safe position in close scene (bottom area)
+					npcX = canvas.width / 2 - charWidth / 2;
+					npcY = canvas.height * 3/4 - charHeight / 2;
+				} else if (currentScene === "far" || currentScene === "indoor") {
+					// Far and indoor scenes - no NPCs
+					npcX = -100; // Off-screen position
+					npcY = -100; // Off-screen position
+				}
 						}
 						
 						characters[userId] = {
@@ -542,18 +635,39 @@ var update = function (modifier) {
 	var originalY = hero.y;
 
 	if (38 in keysDown || 87 in keysDown) { // Player holding up (arrow up or W)
-		hero.y = Math.max(wallSize, hero.y - hero.speed * modifier);
+		if (currentScene === "indoor") {
+			hero.y = Math.max(wallSize, hero.y - hero.speed * modifier);
+		} else {
+			hero.y = Math.max(wallSize, hero.y - hero.speed * modifier);
+		}
 	}
 	if (40 in keysDown || 83 in keysDown) { // Player holding down (arrow down or S)
-		hero.y = Math.min(canvas.height - wallSize - heroHeight, hero.y + hero.speed * modifier);
+		if (currentScene === "indoor") {
+			hero.y = Math.min(sceneBoundaries.indoor.height - wallSize, hero.y + hero.speed * modifier);
+		} else {
+			hero.y = Math.min(canvas.height - wallSize, hero.y + hero.speed * modifier);
+		}
 	}
 	if (37 in keysDown || 65 in keysDown) { // Player holding left (arrow left or A)
-		hero.x = Math.max(wallSize, hero.x - hero.speed * modifier);
+		if (currentScene === "indoor") {
+			hero.x = Math.max(wallSize, hero.x - hero.speed * modifier);
+		} else {
+			hero.x = Math.max(wallSize, hero.x - hero.speed * modifier);
+		}
 		hero.facingRight = false; // Face left
 	}
 	if (39 in keysDown || 68 in keysDown) { // Player holding right (arrow right or D)
-		hero.x = Math.min(canvas.width - wallSize - heroWidth, hero.x + hero.speed * modifier);
+		if (currentScene === "indoor") {
+			hero.x = Math.min(sceneBoundaries.indoor.width - wallSize, hero.x + hero.speed * modifier);
+		} else {
+			hero.x = Math.min(canvas.width - wallSize, hero.x + hero.speed * modifier);
+		}
 		hero.facingRight = true; // Face right
+	}
+
+	// Update camera for indoor scene
+	if (currentScene === "indoor") {
+		updateCamera();
 	}
 
 	// Check wall collision and revert if collision
@@ -797,18 +911,41 @@ var update = function (modifier) {
 
 	// Scene transition logic
 	if (!sceneTransitioning) {
-		if (currentScene === "close" && hero.y > sceneBoundaries.close.bottom) {
-			// Switch to far scene
-			sceneTransitioning = true;
-			currentScene = "far";
-			// Reset hero position to top of far scene (above transition area)
-			hero.y = 300; // Top of screen
-			// Update NPC positions for new scene
-			updateNPCPositionsForScene();
-			// Reset transition flag after a short delay
-			setTimeout(function() {
-				sceneTransitioning = false;
-			}, 500);
+		if (currentScene === "close") {
+			// Check for transition to far scene
+			if (hero.y > sceneBoundaries.close.bottom) {
+				// Switch to far scene
+				sceneTransitioning = true;
+				currentScene = "far";
+				// Reset hero position to top of far scene (above transition area)
+				hero.y = 300; // Top of screen
+				// Update NPC positions for new scene
+				updateNPCPositionsForScene();
+				// Reset transition flag after a short delay
+				setTimeout(function() {
+					sceneTransitioning = false;
+				}, 500);
+			} 
+			// Check for transition to indoor scene (top center)
+			else if (hero.y <= sceneBoundaries.close.top.bottom && 
+				hero.y >= sceneBoundaries.close.top.top &&
+				hero.x >= sceneBoundaries.close.top.left && 
+				hero.x <= sceneBoundaries.close.top.right) {
+				// Switch to indoor scene
+				sceneTransitioning = true;
+				currentScene = "indoor";
+				// Reset hero position to middle of indoor scene
+				hero.x = sceneBoundaries.indoor.width / 2 - 26;
+				hero.y = sceneBoundaries.indoor.height - 100;
+				// Update NPC positions for new scene
+				updateNPCPositionsForScene();
+				// Update camera bounds for indoor scene
+				updateCameraBounds();
+				// Reset transition flag after a short delay
+				setTimeout(function() {
+					sceneTransitioning = false;
+				}, 500);
+			}
 		} else if (currentScene === "far" 
 			&& hero.y >= sceneBoundaries.far.top && hero.y <= sceneBoundaries.far.bottom
 			&& hero.x >= sceneBoundaries.far.left && hero.x <= sceneBoundaries.far.right) {
@@ -817,6 +954,22 @@ var update = function (modifier) {
 			currentScene = "close";
 			// Reset hero position to bottom of close scene (above transition area)
 			hero.y = 350; // Just above the bottom boundary
+			// Update NPC positions for new scene
+			updateNPCPositionsForScene();
+			// Reset transition flag after a short delay
+			setTimeout(function() {
+				sceneTransitioning = false;
+			}, 500);
+		} else if (currentScene === "indoor" && 
+			hero.y >= sceneBoundaries.indoor.bottom &&
+			hero.x >= sceneBoundaries.indoor.left && 
+			hero.x <= sceneBoundaries.indoor.right) {
+			// Switch back to close scene from indoor
+			sceneTransitioning = true;
+			currentScene = "close";
+			// Reset hero position to edge of indoor transition area (outside indoor entrance)
+			hero.y = sceneBoundaries.close.top.bottom + 10; // Just below indoor transition area
+			hero.x = (sceneBoundaries.close.top.left + sceneBoundaries.close.top.right) / 2 - 26; // Center horizontally
 			// Update NPC positions for new scene
 			updateNPCPositionsForScene();
 			// Reset transition flag after a short delay
@@ -841,19 +994,15 @@ function updateNPCPositionsForScene() {
 		while (!validPosition && attempts < maxAttempts) {
 			// Generate scene-specific position
 			if (currentScene === "close") {
-				// Bottom 4/5 of screen (avoid top wall)
-				newX = 32 + (Math.random() * (canvas.width - 64 - charWidth));
-				newY = canvas.height / 5 + 32 + (Math.random() * (canvas.height * 4/5 - 64 - charHeight));
-			} else { // far scene
-				// Avoid the church area (walls.far[0])
-				do {
+					// Bottom 4/5 of screen (avoid top wall)
 					newX = 32 + (Math.random() * (canvas.width - 64 - charWidth));
-					newY = 32 + (Math.random() * (canvas.height - 64 - charHeight));
-				} while (
-					newY >= 200 && newY <= 250 && 
-					newX >= 190 && newX <= 320
-				);
-			}
+					newY = canvas.height / 5 + 32 + (Math.random() * (canvas.height * 4/5 - 64 - charHeight));
+				} else if (currentScene === "far" || currentScene === "indoor") {
+					// Far and indoor scenes - no NPCs
+					newX = -100; // Off-screen position
+					newY = -100; // Off-screen position
+					validPosition = true; // Skip collision check
+				}
 			
 			// Check if position collides with walls
 			if (!checkWallCollision(newX, newY, charWidth, charHeight)) {
@@ -866,12 +1015,13 @@ function updateNPCPositionsForScene() {
 		// If no valid position found, use scene-specific safe position
 		if (!validPosition) {
 			if (currentScene === "close") {
-				newX = canvas.width / 2 - charWidth / 2;
-				newY = canvas.height * 3/4 - charHeight / 2;
-			} else {
-				newX = 100;
-				newY = canvas.height / 2 - charHeight / 2;
-			}
+					newX = canvas.width / 2 - charWidth / 2;
+					newY = canvas.height * 3/4 - charHeight / 2;
+				} else if (currentScene === "far" || currentScene === "indoor") {
+					// Far and indoor scenes - no NPCs
+					newX = -100; // Off-screen position
+					newY = -100; // Off-screen position
+				}
 		}
 		
 		// Update NPC position
@@ -924,6 +1074,27 @@ var render = function () {
 			ctx.textBaseline = "middle";
 			ctx.fillText("Loading far scene...", canvas.width / 2, canvas.height / 2);
 		}
+	} else if (currentScene === "indoor") {
+		if (bgIndoorReady) {
+			// Draw indoor scene with camera and zoom
+			ctx.save();
+			ctx.translate(-camera.x, -camera.y);
+			ctx.scale(indoorZoom, indoorZoom);
+			ctx.drawImage(bgIndoorImage, 0, 0, sceneBoundaries.indoor.width, sceneBoundaries.indoor.height);
+			ctx.restore();
+			backgroundDrawn = true;
+		} else {
+			// Force black background if indoor image not ready
+			ctx.fillStyle = "black";
+			ctx.fillRect(0, 0, canvas.width, canvas.height);
+			
+			// Draw loading text
+			ctx.fillStyle = "white";
+			ctx.font = "16px Arial";
+			ctx.textAlign = "center";
+			ctx.textBaseline = "middle";
+			ctx.fillText("Loading indoor scene...", canvas.width / 2, canvas.height / 2);
+		}
 	}
 	
 	// Ensure black background if no background drawn
@@ -943,6 +1114,8 @@ var render = function () {
 		ctx.fillText("Close: " + (bgReady ? "✓" : "✗"), 10, 85);
 		ctx.fillText("Far: " + (bgFarReady ? "✓" : "✗"), 10, 100);
 		ctx.fillText("Block: " + (bgFarBlockReady ? "✓" : "✗"), 10, 115);
+		ctx.fillText("Indoor: " + (bgIndoorReady ? "✓" : "✗"), 10, 130);
+		ctx.fillText("Current Scene: " + currentScene, 10, 160);
 	}
 
 	// Draw characters first (only in close scene)
@@ -954,6 +1127,11 @@ var render = function () {
 				
 				// Flip image if facing right
 				ctx.save();
+				if (currentScene === "indoor") {
+					// Apply camera and zoom for indoor scene
+					ctx.translate(-camera.x, -camera.y);
+					ctx.scale(indoorZoom, indoorZoom);
+				}
 				if (character.facingRight === true) {
 					var imgWidth = characterImages[character.image].image.width;
 					// Translate to center of image for flipping
@@ -976,6 +1154,11 @@ var render = function () {
 		
 		// Flip image if facing right
 		ctx.save();
+		if (currentScene === "indoor") {
+			// Apply camera and zoom for indoor scene
+			ctx.translate(-camera.x, -camera.y);
+			ctx.scale(indoorZoom, indoorZoom);
+		}
 		if (hero.facingRight === true) {
 			// Translate to center of target size for flipping
 			ctx.translate(hero.x + 26, hero.y);
@@ -1001,6 +1184,10 @@ var render = function () {
 			ctx.fillText("Scene: " + currentScene, 10, 25);
 			ctx.fillText("HeroReady: " + heroReady, 10, 40);
 			ctx.fillText("HeroAlpha: " + hero.alpha, 10, 55);
+			if (currentScene === "indoor") {
+				ctx.fillText("Camera: x=" + Math.round(camera.x) + ", y=" + Math.round(camera.y), 10, 70);
+				ctx.fillText("Zoom: " + indoorZoom, 10, 85);
+			}
 		}
 	}
 
@@ -1019,7 +1206,14 @@ var render = function () {
 						ctx.globalAlpha = msg.alpha;
 						// Position bubbles above each other (newest at bottom)
 						var bubbleIndex = character.messages.length - 1 - index;
+						ctx.save();
+						if (currentScene === "indoor") {
+							// Apply camera and zoom for indoor scene
+							ctx.translate(-camera.x, -camera.y);
+							ctx.scale(indoorZoom, indoorZoom);
+						}
 						drawChatBubble(character.x + 32, character.y - 18 - (bubbleIndex * 20), msg.content);
+						ctx.restore();
 						ctx.globalAlpha = 1;
 					}
 				});
@@ -1034,7 +1228,14 @@ var render = function () {
 				ctx.globalAlpha = msg.alpha;
 				// Position bubbles above hero (newest at bottom)
 				var bubbleIndex = hero.messages.length - 1 - index;
+				ctx.save();
+				if (currentScene === "indoor") {
+					// Apply camera and zoom for indoor scene
+					ctx.translate(-camera.x, -camera.y);
+					ctx.scale(indoorZoom, indoorZoom);
+				}
 				drawChatBubble(hero.x + 32, hero.y - 18 - (bubbleIndex * 24), msg.content);
+				ctx.restore();
 				ctx.globalAlpha = 1;
 			}
 		});
