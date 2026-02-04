@@ -635,26 +635,28 @@ var render = function () {
 		ctx.drawImage(bgFarImage, 0, 0, 512, 480);
 	}
 
-	// Draw characters first
-	for (var userId in characters) {
-		var character = characters[userId];
-		if (characterImages[character.image] && characterImages[character.image].ready) {
-			ctx.globalAlpha = character.alpha;
-			
-			// Flip image if facing right
-			ctx.save();
-			if (character.facingRight === true) {
-				var imgWidth = characterImages[character.image].image.width;
-				// Translate to center of image for flipping
-				ctx.translate(character.x + imgWidth / 2, character.y);
-				ctx.scale(-1, 1);
-				// Draw image centered at origin
-				ctx.drawImage(characterImages[character.image].image, -imgWidth / 2, 0);
-			} else {
-				ctx.drawImage(characterImages[character.image].image, character.x, character.y);
+	// Draw characters first (only in close scene)
+	if (currentScene === "close") {
+		for (var userId in characters) {
+			var character = characters[userId];
+			if (characterImages[character.image] && characterImages[character.image].ready) {
+				ctx.globalAlpha = character.alpha;
+				
+				// Flip image if facing right
+				ctx.save();
+				if (character.facingRight === true) {
+					var imgWidth = characterImages[character.image].image.width;
+					// Translate to center of image for flipping
+					ctx.translate(character.x + imgWidth / 2, character.y);
+					ctx.scale(-1, 1);
+					// Draw image centered at origin
+					ctx.drawImage(characterImages[character.image].image, -imgWidth / 2, 0);
+				} else {
+					ctx.drawImage(characterImages[character.image].image, character.x, character.y);
+				}
+				ctx.restore();
+				ctx.globalAlpha = 1;
 			}
-			ctx.restore();
-			ctx.globalAlpha = 1;
 		}
 	}
 
@@ -680,19 +682,21 @@ var render = function () {
 		ctx.globalAlpha = 1;
 	}
 
-	// Draw chat bubbles on top
-	for (var userId in characters) {
-		var character = characters[userId];
-		if (character.messages) {
-			character.messages.forEach(function (msg, index) {
-				if (msg.alpha > 0) {
-					ctx.globalAlpha = msg.alpha;
-					// Position bubbles above each other (newest at bottom)
-					var bubbleIndex = character.messages.length - 1 - index;
-					drawChatBubble(character.x + 32, character.y - 18 - (bubbleIndex * 20), msg.content);
-					ctx.globalAlpha = 1;
-				}
-			});
+	// Draw chat bubbles on top (only in close scene)
+	if (currentScene === "close") {
+		for (var userId in characters) {
+			var character = characters[userId];
+			if (character.messages) {
+				character.messages.forEach(function (msg, index) {
+					if (msg.alpha > 0) {
+						ctx.globalAlpha = msg.alpha;
+						// Position bubbles above each other (newest at bottom)
+						var bubbleIndex = character.messages.length - 1 - index;
+						drawChatBubble(character.x + 32, character.y - 18 - (bubbleIndex * 20), msg.content);
+						ctx.globalAlpha = 1;
+					}
+				});
+			}
 		}
 	}
 
