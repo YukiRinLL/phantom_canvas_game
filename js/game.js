@@ -168,7 +168,7 @@ function updateCamera() {
 	}
 }
 
-// Wall collision detection
+// Wall collision detection - 新增indoor场景具体墙体和物品碰撞区域
 var walls = {
 	close: [
 		// Top wall (1/5 of screen height)
@@ -187,11 +187,9 @@ var walls = {
 			left: 190,
 			right: 320
 		}
-		// Add more walls as needed
-		// ...
 	],
 	indoor: [
-		// Indoor scene walls - boundary walls based on actual scene dimensions
+		// 边界墙体（原有的外框墙）
 		{
 			top: 0,
 			bottom: 32,
@@ -215,7 +213,79 @@ var walls = {
 			bottom: sceneBoundaries.indoor.height,
 			left: 0,
 			right: sceneBoundaries.indoor.width
-		}
+		},
+
+
+		{
+			top: 250,
+			bottom: 300,
+			left: 150,
+			right: 195
+		},
+
+//		// 室内墙体2 - 右侧柱子
+//		{
+//			top: 100,
+//			bottom: 400,
+//			left: 422,
+//			right: 452
+//		},
+//
+//		// 室内墙体3 - 中间隔断墙
+//		{
+//			top: 250,
+//			bottom: 350,
+//			left: 180,
+//			right: 332
+//		},
+//
+//		// 室内物品1 - 左侧桌子
+//		{
+//			top: 450,
+//			bottom: 500,
+//			left: 80,
+//			right: 180
+//		},
+//
+//		// 室内物品2 - 右侧桌子
+//		{
+//			top: 450,
+//			bottom: 500,
+//			left: 332,
+//			right: 432
+//		},
+//
+//		// 室内物品3 - 前方祭坛/柜子（下方区域）
+//		{
+//			top: 600,
+//			bottom: 700,
+//			left: 150,
+//			right: 362
+//		},
+//
+//		// 室内物品4 - 左侧书架
+//		{
+//			top: 520,
+//			bottom: 650,
+//			left: 40,
+//			right: 80
+//		},
+//
+//		// 室内物品5 - 右侧书架
+//		{
+//			top: 520,
+//			bottom: 650,
+//			left: 432,
+//			right: 472
+//		},
+//
+//		// 室内墙体4 - 上方横梁
+//		{
+//			top: 50,
+//			bottom: 80,
+//			left: 80,
+//			right: 432
+//		}
 	]
 };
 
@@ -248,11 +318,9 @@ var hero = {
 
 // Handle keyboard controls
 var keysDown = {};
-
 addEventListener("keydown", function (e) {
 	keysDown[e.keyCode] = true;
 }, false);
-
 addEventListener("keyup", function (e) {
 	delete keysDown[e.keyCode];
 }, false);
@@ -260,10 +328,10 @@ addEventListener("keyup", function (e) {
 // Check if a point collides with any wall in the current scene
 function checkWallCollision(x, y, width, height) {
 	var currentWalls = walls[currentScene] || [];
-	
+
 	for (var i = 0; i < currentWalls.length; i++) {
 		var wall = currentWalls[i];
-		
+
 		// Check if character's bounding box intersects with wall
 		if (
 			x < wall.right &&
@@ -274,7 +342,7 @@ function checkWallCollision(x, y, width, height) {
 			return true; // Collision detected
 		}
 	}
-	
+
 	return false; // No collision
 }
 
@@ -309,10 +377,8 @@ function loadCharacterImages() {
 		"images/jobs/Tank/Paladin.png",
 		"images/jobs/Tank/Warrior.png"
 	];
-
 	// Initialize available image paths pool
 	availableImagePaths = [...imagePaths];
-
 	// Load images
 	imagePaths.forEach(function (path) {
 		var imageName = path.split('/').pop();
@@ -345,10 +411,9 @@ function fetchChatMessages() {
 function processChatMessages(messages) {
 	// Save current messages as previous for comparison
 	previousChatMessages = [...chatMessages];
-	
+
 	// Update chat messages
 	chatMessages = messages;
-
 	// Update characters based on messages
 	updateCharacters();
 }
@@ -363,7 +428,7 @@ function parseMessageContent(message) {
 	cleanMessage = cleanMessage.replace(/\n/g, ' ');
 	// Trim whitespace
 	cleanMessage = cleanMessage.trim();
-	
+
 	// If we still have the prefix, try alternative parsing
 	if (cleanMessage.includes('{type=text, data={text=')) {
 		// Use a more robust regex
@@ -372,7 +437,7 @@ function parseMessageContent(message) {
 			cleanMessage = match[1].trim().replace(/\s*}$/, '');
 		}
 	}
-	
+
 	return cleanMessage;
 }
 
@@ -386,7 +451,6 @@ function updateCharacters() {
 			currentActiveUserIds[message.userId] = true;
 		}
 	});
-
 	// Get unique user IDs from previous messages
 	var previousActiveUserIds = {};
 	previousChatMessages.forEach(function (message) {
@@ -395,7 +459,6 @@ function updateCharacters() {
 			previousActiveUserIds[message.userId] = true;
 		}
 	});
-
 	// Handle hero's messages separately
 	var currentHeroMessages = chatMessages.filter(function (msg) {
 		return msg.userId == hero.userId;
@@ -403,7 +466,7 @@ function updateCharacters() {
 	var previousHeroMessages = previousChatMessages.filter(function (msg) {
 		return msg.userId == hero.userId;
 	});
-	
+
 	// Add new hero messages with fade-in effect
 	currentHeroMessages.forEach(function (msg) {
 		var parsedMessage = parseMessageContent(msg.message);
@@ -411,12 +474,12 @@ function updateCharacters() {
 		var existingMessage = hero.messages.find(function (m) {
 			return m.content === parsedMessage;
 		});
-		
+
 		// Check if there's already a "..." message
 		var hasEllipsis = hero.messages.some(function (m) {
 			return m.content === "...";
 		});
-		
+
 		if (!existingMessage) {
 			// Check if message is not empty or just spaces
 			if (parsedMessage.trim() !== '') {
@@ -424,7 +487,7 @@ function updateCharacters() {
 				ctx.font = "12px Helvetica"; // Smaller font
 				var textWidth = ctx.measureText(parsedMessage).width;
 				var maxBubbleWidth = canvas.width - (hero.x + 32) - 10;
-				
+
 				if (textWidth + 16 > maxBubbleWidth) {
 					// Message would be "..."
 					if (!hasEllipsis) {
@@ -448,7 +511,7 @@ function updateCharacters() {
 			}
 		}
 	});
-	
+
 	// Mark disappeared hero messages for fade-out
 	hero.messages.forEach(function (msg) {
 		var stillExists = currentHeroMessages.some(function (chatMsg) {
@@ -459,13 +522,12 @@ function updateCharacters() {
 			msg.fadingIn = false;
 		}
 	});
-	
+
 	// Limit number of messages for hero to 3
 	if (hero.messages.length > 3) {
 		// Remove oldest messages beyond 3
 		hero.messages = hero.messages.slice(-3);
 	}
-
 	// Handle new users (fade-in)
 	for (var userId in currentActiveUserIds) {
 		if (!characters[userId]) {
@@ -484,13 +546,13 @@ function updateCharacters() {
 						var charWidth = 52;
 						var charHeight = 60;
 						var wallSize = 32;
-						
+
 						// Generate NPC position that doesn't collide with walls
 						var npcX, npcY;
 						var maxAttempts = 50; // Increased attempts for better positioning
 						var attempts = 0;
 						var validPosition = false;
-						
+
 						while (!validPosition && attempts < maxAttempts) {
 							// Generate random position within scene-specific bounds
 							// For close scene: avoid top wall area
@@ -504,15 +566,15 @@ function updateCharacters() {
 					npcY = -100; // Off-screen position
 					validPosition = true; // Skip collision check
 				}
-							
+
 							// Check if position collides with walls
 							if (!checkWallCollision(npcX, npcY, charWidth, charHeight)) {
 								validPosition = true;
 							}
-							
+
 							attempts++;
 						}
-						
+
 						// If no valid position found after max attempts, use a scene-specific safe position
 						if (!validPosition) {
 							if (currentScene === "close") {
@@ -525,7 +587,7 @@ function updateCharacters() {
 					npcY = -100; // Off-screen position
 				}
 						}
-						
+
 						characters[userId] = {
 							x: npcX,
 							y: npcY,
@@ -538,18 +600,17 @@ function updateCharacters() {
 							facingRight: true // Initialize facing direction
 						};
 		}
-
 		// Update character messages
 		// Get all current messages from this user
 		var currentUserMessages = chatMessages.filter(function (msg) {
 			return msg.userId == userId;
 		});
-		
+
 		// Get all previous messages from this user
 		var previousUserMessages = previousChatMessages.filter(function (msg) {
 			return msg.userId == userId;
 		});
-		
+
 		// Add new messages with fade-in effect
 		currentUserMessages.forEach(function (msg) {
 			var parsedMessage = parseMessageContent(msg.message);
@@ -557,12 +618,12 @@ function updateCharacters() {
 			var existingMessage = characters[userId].messages.find(function (m) {
 				return m.content === parsedMessage;
 			});
-			
+
 			// Check if there's already a "..." message
 			var hasEllipsis = characters[userId].messages.some(function (m) {
 				return m.content === "...";
 			});
-			
+
 			if (!existingMessage) {
 				// Check if message is not empty or just spaces
 				if (parsedMessage.trim() !== '') {
@@ -570,7 +631,7 @@ function updateCharacters() {
 					ctx.font = "12px Helvetica"; // Smaller font
 					var textWidth = ctx.measureText(parsedMessage).width;
 					var maxBubbleWidth = canvas.width - (characters[userId].x + 32) - 10;
-					
+
 					if (textWidth + 16 > maxBubbleWidth) {
 						// Message would be "..."
 						if (!hasEllipsis) {
@@ -594,7 +655,7 @@ function updateCharacters() {
 				}
 			}
 		});
-		
+
 		// Mark disappeared messages for fade-out
 		characters[userId].messages.forEach(function (msg) {
 			var stillExists = currentUserMessages.some(function (chatMsg) {
@@ -605,14 +666,13 @@ function updateCharacters() {
 				msg.fadingIn = false;
 			}
 		});
-		
+
 		// Limit number of messages per character to 3
 		if (characters[userId].messages.length > 3) {
 			// Remove oldest messages beyond 3
 			characters[userId].messages = characters[userId].messages.slice(-3);
 		}
 	}
-
 	// Handle disappeared users (fade-out)
 	for (var userId in characters) {
 		if (!currentActiveUserIds[userId] && !characters[userId].fadingOut) {
@@ -629,11 +689,10 @@ var update = function (modifier) {
 	var heroWidth = 52;
 	var heroHeight = 60;
 	var wallSize = 32;
-	
+
 	// Store original position for collision detection
 	var originalX = hero.x;
 	var originalY = hero.y;
-
 	if (38 in keysDown || 87 in keysDown) { // Player holding up (arrow up or W)
 		if (currentScene === "indoor") {
 			hero.y = Math.max(wallSize, hero.y - hero.speed * modifier);
@@ -664,19 +723,16 @@ var update = function (modifier) {
 		}
 		hero.facingRight = true; // Face right
 	}
-
 	// Update camera for indoor scene
 	if (currentScene === "indoor") {
 		updateCamera();
 	}
-
 	// Check wall collision and revert if collision
 	if (checkWallCollision(hero.x, hero.y, heroWidth, heroHeight)) {
 		// Revert to original position
 		hero.x = originalX;
 		hero.y = originalY;
 	}
-
 	// Update characters
 	for (var userId in characters) {
 		var character = characters[userId];
@@ -707,13 +763,12 @@ var update = function (modifier) {
 					homeX: character.x,
 					homeY: character.y,
 					state: Math.random() > 0.7 ? 'moving' : 'idle', // 30% chance to start moving, 70% chance to start idle
-					stateEndTime: Date.now() + (Math.random() > 0.7 ? 
+					stateEndTime: Date.now() + (Math.random() > 0.7 ?
 						2000 + Math.random() * 3000 : // Moving for 2-5 seconds
 						5000 + Math.random() * 10000), // Idle for 5-15 seconds
 					changeDirectionTime: Date.now() + 2000 + Math.random() * 3000 // Change direction every 2-5 seconds for free mode
 				};
 			}
-
 			// Check if current state has ended
 			if (Date.now() > character.movement.stateEndTime) {
 				// Switch state
@@ -729,7 +784,6 @@ var update = function (modifier) {
 					character.movement.stateEndTime = Date.now() + 5000 + Math.random() * 10000;
 				}
 			}
-
 			// Only move if in moving state
 			if (character.movement.state === 'moving') {
 				if (character.movement.mode === 'range') {
@@ -742,14 +796,12 @@ var update = function (modifier) {
 					var deltaX = Math.cos(character.movement.direction) * character.movement.speed * modifier;
 					character.x += deltaX;
 					character.y += Math.sin(character.movement.direction) * character.movement.speed * modifier;
-
 					// Always set facing direction to match movement direction
 					if (deltaX > 0) {
 						character.facingRight = true; // Face right when moving right
 					} else if (deltaX < 0) {
 						character.facingRight = false; // Face left when moving left
 					}
-
 					// Keep character within range of home position
 					var dx = character.x - character.movement.homeX;
 					var dy = character.y - character.movement.homeY;
@@ -764,19 +816,19 @@ var update = function (modifier) {
 						var newDeltaX = Math.cos(character.movement.direction);
 						character.facingRight = newDeltaX > 0;
 					}
-					
+
 					// Ensure character stays within wall boundaries
 					var charWidth = 52;
 					var charHeight = 60;
 					var wallSize = 32;
-					
+
 					// Store original position for collision detection
 					var originalCharX = character.x;
 					var originalCharY = character.y;
-					
+
 					character.x = Math.max(wallSize, Math.min(canvas.width - wallSize - charWidth, character.x));
 					character.y = Math.max(wallSize, Math.min(canvas.height - wallSize - charHeight, character.y));
-					
+
 					// Check wall collision and revert if collision
 					if (checkWallCollision(character.x, character.y, charWidth, charHeight)) {
 						// Revert to original position
@@ -793,30 +845,27 @@ var update = function (modifier) {
 					// Store original position for collision detection
 					var originalCharX = character.x;
 					var originalCharY = character.y;
-					
+
 					// Change direction periodically
 					if (Date.now() > character.movement.changeDirectionTime) {
 						character.movement.direction = Math.random() * Math.PI * 2;
 						character.movement.changeDirectionTime = Date.now() + 2000 + Math.random() * 3000; // Change direction every 2-5 seconds
 					}
-
 					// Update position
 					var deltaX = Math.cos(character.movement.direction) * character.movement.speed * modifier;
 					character.x += deltaX;
 					character.y += Math.sin(character.movement.direction) * character.movement.speed * modifier;
-
 					// Always set facing direction to match movement direction
 					if (deltaX > 0) {
 						character.facingRight = true; // Face right when moving right
 					} else if (deltaX < 0) {
 						character.facingRight = false; // Face left when moving left
 					}
-
 					// Wrap around or bounce at map edges (considering character size 52x60 and 32px wall)
 					var charWidth = 52;
 					var charHeight = 60;
 					var wallSize = 32;
-					
+
 					if (character.x < wallSize) {
 						character.x = wallSize;
 						character.movement.direction = Math.PI - character.movement.direction;
@@ -828,7 +877,6 @@ var update = function (modifier) {
 						// Update facing direction after bounce
 						character.facingRight = false; // Now moving left
 					}
-
 					if (character.y < wallSize) {
 						character.y = wallSize;
 						character.movement.direction = -character.movement.direction;
@@ -842,7 +890,7 @@ var update = function (modifier) {
 						var deltaX = Math.cos(character.movement.direction);
 						character.facingRight = deltaX > 0;
 					}
-					
+
 					// Check wall collision and revert if collision
 					if (checkWallCollision(character.x, character.y, charWidth, charHeight)) {
 						// Revert to original position
@@ -857,12 +905,11 @@ var update = function (modifier) {
 				}
 			}
 		}
-
 		// Handle message bubble timeouts and fade effects
 		if (character.messages) {
 			for (var i = character.messages.length - 1; i >= 0; i--) {
 				var msg = character.messages[i];
-				
+
 				// Handle fade-in effect
 				if (msg.fadingIn) {
 					msg.alpha = Math.min(1, msg.alpha + modifier * 2);
@@ -883,12 +930,11 @@ var update = function (modifier) {
 			}
 		}
 	}
-
 	// Update hero messages with fade effects
 	if (hero.messages) {
 		for (var i = hero.messages.length - 1; i >= 0; i--) {
 			var msg = hero.messages[i];
-			
+
 			// Handle fade-in effect
 			if (msg.fadingIn) {
 				msg.alpha = Math.min(1, msg.alpha + modifier * 2);
@@ -908,7 +954,6 @@ var update = function (modifier) {
 			}
 		}
 	}
-
 	// Scene transition logic
 	if (!sceneTransitioning) {
 		if (currentScene === "close") {
@@ -925,11 +970,11 @@ var update = function (modifier) {
 				setTimeout(function() {
 					sceneTransitioning = false;
 				}, 500);
-			} 
+			}
 			// Check for transition to indoor scene (top center)
-			else if (hero.y <= sceneBoundaries.close.top.bottom && 
+			else if (hero.y <= sceneBoundaries.close.top.bottom &&
 				hero.y >= sceneBoundaries.close.top.top &&
-				hero.x >= sceneBoundaries.close.top.left && 
+				hero.x >= sceneBoundaries.close.top.left &&
 				hero.x <= sceneBoundaries.close.top.right) {
 				// Switch to indoor scene
 				sceneTransitioning = true;
@@ -946,7 +991,7 @@ var update = function (modifier) {
 					sceneTransitioning = false;
 				}, 500);
 			}
-		} else if (currentScene === "far" 
+		} else if (currentScene === "far"
 			&& hero.y >= sceneBoundaries.far.top && hero.y <= sceneBoundaries.far.bottom
 			&& hero.x >= sceneBoundaries.far.left && hero.x <= sceneBoundaries.far.right) {
 			// Switch to close scene
@@ -960,9 +1005,9 @@ var update = function (modifier) {
 			setTimeout(function() {
 				sceneTransitioning = false;
 			}, 500);
-		} else if (currentScene === "indoor" && 
+		} else if (currentScene === "indoor" &&
 			hero.y >= sceneBoundaries.indoor.bottom &&
-			hero.x >= sceneBoundaries.indoor.left && 
+			hero.x >= sceneBoundaries.indoor.left &&
 			hero.x <= sceneBoundaries.indoor.right) {
 			// Switch back to close scene from indoor
 			sceneTransitioning = true;
@@ -978,19 +1023,20 @@ var update = function (modifier) {
 			}, 500);
 		}
 	}
+};
 
 // Update NPC positions when scene changes
 function updateNPCPositionsForScene() {
 	var charWidth = 52;
 	var charHeight = 60;
-	
+
 	for (var userId in characters) {
 		var character = characters[userId];
 		var maxAttempts = 30;
 		var attempts = 0;
 		var validPosition = false;
 		var newX, newY;
-		
+
 		while (!validPosition && attempts < maxAttempts) {
 			// Generate scene-specific position
 			if (currentScene === "close") {
@@ -1003,15 +1049,15 @@ function updateNPCPositionsForScene() {
 					newY = -100; // Off-screen position
 					validPosition = true; // Skip collision check
 				}
-			
+
 			// Check if position collides with walls
 			if (!checkWallCollision(newX, newY, charWidth, charHeight)) {
 				validPosition = true;
 			}
-			
+
 			attempts++;
 		}
-		
+
 		// If no valid position found, use scene-specific safe position
 		if (!validPosition) {
 			if (currentScene === "close") {
@@ -1023,7 +1069,7 @@ function updateNPCPositionsForScene() {
 					newY = -100; // Off-screen position
 				}
 		}
-		
+
 		// Update NPC position
 		character.x = newX;
 		character.y = newY;
@@ -1031,13 +1077,12 @@ function updateNPCPositionsForScene() {
 		delete character.movement;
 	}
 }
-};
 
 // Draw everything
 var render = function () {
 	// Clear canvas first
 	ctx.clearRect(0, 0, canvas.width, canvas.height);
-	
+
 	// Draw background with loading handling
 	var backgroundDrawn = false;
 	if (currentScene === "close") {
@@ -1048,7 +1093,7 @@ var render = function () {
 			// Force black background if close image not ready
 			ctx.fillStyle = "black";
 			ctx.fillRect(0, 0, canvas.width, canvas.height);
-			
+
 			// Draw loading text
 			ctx.fillStyle = "white";
 			ctx.font = "16px Arial";
@@ -1066,7 +1111,7 @@ var render = function () {
 			console.log("Far background not ready, filling with black");
 			ctx.fillStyle = "black";
 			ctx.fillRect(0, 0, canvas.width, canvas.height);
-			
+
 			// Draw loading text
 			ctx.fillStyle = "white";
 			ctx.font = "16px Arial";
@@ -1087,7 +1132,7 @@ var render = function () {
 			// Force black background if indoor image not ready
 			ctx.fillStyle = "black";
 			ctx.fillRect(0, 0, canvas.width, canvas.height);
-			
+
 			// Draw loading text
 			ctx.fillStyle = "white";
 			ctx.font = "16px Arial";
@@ -1096,14 +1141,14 @@ var render = function () {
 			ctx.fillText("Loading indoor scene...", canvas.width / 2, canvas.height / 2);
 		}
 	}
-	
+
 	// Ensure black background if no background drawn
 	if (!backgroundDrawn) {
 		console.log("No background drawn, filling with black");
 		ctx.fillStyle = "black";
 		ctx.fillRect(0, 0, canvas.width, canvas.height);
 	}
-	
+
 	// Draw debug info for image loading
 	if (debugMode) {
 		ctx.fillStyle = "white";
@@ -1118,13 +1163,29 @@ var render = function () {
 		ctx.fillText("Current Scene: " + currentScene, 10, 160);
 	}
 
+	// 调试模式下绘制indoor场景的碰撞区域（红色半透明）
+	if (debugMode && currentScene === "indoor") {
+		var currentWalls = walls[currentScene] || [];
+		ctx.save();
+		ctx.translate(-camera.x, -camera.y);
+		ctx.scale(indoorZoom, indoorZoom);
+
+		for (var i = 0; i < currentWalls.length; i++) {
+			var wall = currentWalls[i];
+			ctx.fillStyle = "rgba(255, 0, 0, 0.3)";
+			ctx.fillRect(wall.left, wall.top, wall.right - wall.left, wall.bottom - wall.top);
+		}
+
+		ctx.restore();
+	}
+
 	// Draw characters first (only in close scene)
 	if (currentScene === "close") {
 		for (var userId in characters) {
 			var character = characters[userId];
 			if (characterImages[character.image] && characterImages[character.image].ready) {
 				ctx.globalAlpha = character.alpha;
-				
+
 				// Flip image if facing right
 			ctx.save();
 			if (character.facingRight === true) {
@@ -1146,7 +1207,7 @@ var render = function () {
 	// Draw hero
 	if (heroReady) {
 		ctx.globalAlpha = hero.alpha;
-		
+
 		// Flip image if facing right
 		ctx.save();
 		if (currentScene === "indoor") {
@@ -1154,7 +1215,7 @@ var render = function () {
 			// Calculate screen position based on camera and hero position
 			var screenX = (hero.x * indoorZoom) - camera.x;
 			var screenY = (hero.y * indoorZoom) - camera.y;
-			
+
 			if (hero.facingRight === true) {
 				// Translate to center of target size for flipping
 				ctx.translate(screenX + 26, screenY);
@@ -1184,7 +1245,7 @@ var render = function () {
 		}
 		ctx.restore();
 		ctx.globalAlpha = 1;
-		
+
 		// Draw debug info for hero
 		if (debugMode) {
 			ctx.fillStyle = "white";
@@ -1258,28 +1319,23 @@ function drawChatBubble(x, y, text) {
 	ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
 	ctx.strokeStyle = "rgba(0, 0, 0, 0.4)";
 	ctx.lineWidth = 2;
-
 	// Calculate text width
 	ctx.font = "12px Helvetica"; // font
 	var padding = 4; // padding
 	var maxBubbleWidth = canvas.width - x - 10;
 	var bubbleHeight = 20; // bubble height
-
 	// Adjust position to avoid off-screen
 	var bubbleX = Math.max(0, x);
 	var bubbleY = Math.max(0, y);
-
 	// Check if text is too long and replace with "..."
 	var displayText = text;
 	var textWidth = ctx.measureText(displayText).width;
-	
+
 	if (textWidth + padding * 2 > maxBubbleWidth) {
 		displayText = "...";
 		textWidth = ctx.measureText(displayText).width;
 	}
-
 	var bubbleWidth = textWidth + padding * 2;
-
 	// Draw bubble with rounded corners (compatible with all browsers)
 	ctx.beginPath();
 	var radius = 8; // Smaller radius
@@ -1294,7 +1350,6 @@ function drawChatBubble(x, y, text) {
 	ctx.quadraticCurveTo(bubbleX, bubbleY, bubbleX + radius, bubbleY);
 	ctx.fill();
 	ctx.stroke();
-
 	// Draw text
 	ctx.fillStyle = "rgb(0, 0, 0)";
 	ctx.textAlign = "left";
@@ -1306,12 +1361,9 @@ function drawChatBubble(x, y, text) {
 var main = function () {
 	var now = Date.now();
 	var delta = now - then;
-
 	update(delta / 1000);
 	render();
-
 	then = now;
-
 	// Request to do this again ASAP
 	requestAnimationFrame(main);
 };
@@ -1323,11 +1375,8 @@ requestAnimationFrame = w.requestAnimationFrame || w.webkitRequestAnimationFrame
 // Let's start the chat room!
 var then = Date.now();
 loadCharacterImages();
-
 // Fetch chat messages initially
 fetchChatMessages();
-
 // Set up periodic fetching of chat messages
 setInterval(fetchChatMessages, 5000); // Every 5 seconds
-
 main();
