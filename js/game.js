@@ -136,7 +136,7 @@ var camera = {
 };
 
 // Zoom level for indoor scene (can be adjusted manually)
-var indoorZoom = 1.0;
+var indoorZoom = 1.6;
 
 // Debug mode
 var debugMode = true; // Set to true for debug info
@@ -1126,13 +1126,8 @@ var render = function () {
 				ctx.globalAlpha = character.alpha;
 				
 				// Flip image if facing right
-				ctx.save();
-				if (currentScene === "indoor") {
-					// Apply camera and zoom for indoor scene
-					ctx.translate(-camera.x, -camera.y);
-					ctx.scale(indoorZoom, indoorZoom);
-				}
-				if (character.facingRight === true) {
+			ctx.save();
+			if (character.facingRight === true) {
 					var imgWidth = characterImages[character.image].image.width;
 					// Translate to center of image for flipping
 					ctx.translate(character.x + imgWidth / 2, character.y);
@@ -1155,21 +1150,37 @@ var render = function () {
 		// Flip image if facing right
 		ctx.save();
 		if (currentScene === "indoor") {
-			// Apply camera and zoom for indoor scene
-			ctx.translate(-camera.x, -camera.y);
-			ctx.scale(indoorZoom, indoorZoom);
-		}
-		if (hero.facingRight === true) {
-			// Translate to center of target size for flipping
-			ctx.translate(hero.x + 26, hero.y);
-			ctx.scale(-1, 1);
-			var scale = 52 / 70;
-			var cropY = (70 - 60/scale) / 2;
-			ctx.drawImage(heroImage, 0, cropY, 70, 70 - cropY*2, -26, 0, 52, 60);
+			// For indoor scene, draw hero at screen position
+			// Calculate screen position based on camera and hero position
+			var screenX = (hero.x * indoorZoom) - camera.x;
+			var screenY = (hero.y * indoorZoom) - camera.y;
+			
+			if (hero.facingRight === true) {
+				// Translate to center of target size for flipping
+				ctx.translate(screenX + 26, screenY);
+				ctx.scale(-1, 1);
+				var scale = 52 / 70;
+				var cropY = (70 - 60/scale) / 2;
+				ctx.drawImage(heroImage, 0, cropY, 70, 70 - cropY*2, -26, 0, 52, 60);
+			} else {
+				var scale = 52 / 70;
+				var cropY = (70 - 60/scale) / 2;
+				ctx.drawImage(heroImage, 0, cropY, 70, 70 - cropY*2, screenX, screenY, 52, 60);
+			}
 		} else {
-			var scale = 52 / 70;
-			var cropY = (70 - 60/scale) / 2;
-			ctx.drawImage(heroImage, 0, cropY, 70, 70 - cropY*2, hero.x, hero.y, 52, 60);
+			// For other scenes, draw hero normally
+			if (hero.facingRight === true) {
+				// Translate to center of target size for flipping
+				ctx.translate(hero.x + 26, hero.y);
+				ctx.scale(-1, 1);
+				var scale = 52 / 70;
+				var cropY = (70 - 60/scale) / 2;
+				ctx.drawImage(heroImage, 0, cropY, 70, 70 - cropY*2, -26, 0, 52, 60);
+			} else {
+				var scale = 52 / 70;
+				var cropY = (70 - 60/scale) / 2;
+				ctx.drawImage(heroImage, 0, cropY, 70, 70 - cropY*2, hero.x, hero.y, 52, 60);
+			}
 		}
 		ctx.restore();
 		ctx.globalAlpha = 1;
