@@ -13,6 +13,29 @@ bgImage.onload = function () {
 };
 bgImage.src = "images/church-close.png";
 
+// Far background image
+var bgFarReady = false;
+var bgFarImage = new Image();
+bgFarImage.onload = function () {
+	bgFarReady = true;
+};
+bgFarImage.src = "images/church-far.png";
+
+// Scene management
+var currentScene = "close"; // "close" or "far"
+var sceneTransitioning = false; // Prevent multiple transitions at once
+var sceneBoundaries = {
+	close: {
+		bottom: 350 // When hero reaches y > 350 in close scene, switch to far
+	},
+	far: {
+		top: 180,
+		bottom: 300,
+		left: 180,
+		rirht: 300
+	}
+};
+
 // Game objects
 var chatMessages = [];
 var previousChatMessages = []; // Store previous messages for comparison
@@ -575,12 +598,41 @@ var update = function (modifier) {
 			}
 		}
 	}
+
+	// Scene transition logic
+	if (!sceneTransitioning) {
+		if (currentScene === "close" && hero.y > sceneBoundaries.close.bottom) {
+			// Switch to far scene
+			sceneTransitioning = true;
+			currentScene = "far";
+			// Reset hero position to top of far scene (above transition area)
+			hero.y = 300; // Top of screen
+			// Reset transition flag after a short delay
+			setTimeout(function() {
+				sceneTransitioning = false;
+			}, 500);
+		} else if (currentScene === "far" 
+			&& hero.y >= sceneBoundaries.far.top && hero.y <= sceneBoundaries.far.bottom
+			&& hero.x >= sceneBoundaries.far.left && hero.x <= sceneBoundaries.far.rirht) {
+			// Switch to close scene
+			sceneTransitioning = true;
+			currentScene = "close";
+			// Reset hero position to bottom of close scene (above transition area)
+			hero.y = 350; // Just above the bottom boundary
+			// Reset transition flag after a short delay
+			setTimeout(function() {
+				sceneTransitioning = false;
+			}, 500);
+		}
+	}
 };
 
 // Draw everything
 var render = function () {
-	if (bgReady) {
+	if (currentScene === "close" && bgReady) {
 		ctx.drawImage(bgImage, 0, 0, 512, 480);
+	} else if (currentScene === "far" && bgFarReady) {
+		ctx.drawImage(bgFarImage, 0, 0, 512, 480);
 	}
 
 	// Draw characters first
