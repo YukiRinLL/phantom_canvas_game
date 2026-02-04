@@ -21,6 +21,14 @@ bgFarImage.onload = function () {
 };
 bgFarImage.src = "images/church-far.png";
 
+// Far foreground image (blocks)
+var bgFarBlockReady = false;
+var bgFarBlockImage = new Image();
+bgFarBlockImage.onload = function () {
+	bgFarBlockReady = true;
+};
+bgFarBlockImage.src = "images/church-far-block.png";
+
 // Scene management
 var currentScene = "close"; // "close" or "far"
 var sceneTransitioning = false; // Prevent multiple transitions at once
@@ -29,11 +37,35 @@ var sceneBoundaries = {
 		bottom: 380 // When hero reaches y > 380 in close scene, switch to far
 	},
 	far: {
-		top: 180,
+		top: 250,
 		bottom: 280,
-		left: 160,
-		rirht: 320
+		left: 210,
+		right: 280
 	}
+};
+
+// Wall collision detection
+var walls = {
+	close: [
+		// Top wall (1/5 of screen height)
+		{
+			top: 0,
+			bottom: canvas.height / 5, // 1/5 height
+			left: 0,
+			right: canvas.width
+		}
+	],
+	far: [
+		// Add far scene walls here if needed
+		{
+			top: 200,
+			bottom: 250,
+			left: 190,
+			right: 320
+		}
+		// Add more walls as needed
+		// ...
+	]
 };
 
 // Game objects
@@ -73,6 +105,27 @@ addEventListener("keydown", function (e) {
 addEventListener("keyup", function (e) {
 	delete keysDown[e.keyCode];
 }, false);
+
+// Check if a point collides with any wall in the current scene
+function checkWallCollision(x, y, width, height) {
+	var currentWalls = walls[currentScene] || [];
+	
+	for (var i = 0; i < currentWalls.length; i++) {
+		var wall = currentWalls[i];
+		
+		// Check if character's bounding box intersects with wall
+		if (
+			x < wall.right &&
+			x + width > wall.left &&
+			y < wall.bottom &&
+			y + height > wall.top
+		) {
+			return true; // Collision detected
+		}
+	}
+	
+	return false; // No collision
+}
 
 // Load character images
 function loadCharacterImages() {
@@ -277,20 +330,46 @@ function updateCharacters() {
 					}
 					var imageName = selectedImage.split('/').pop();
 					// Consider 32px wall border and 52x60 character size
-					var charWidth = 52;
-					var charHeight = 60;
-					var wallSize = 32;
-					characters[userId] = {
-						x: wallSize + (Math.random() * (canvas.width - wallSize * 2 - charWidth)), // Keep within bounds
-						y: wallSize + (Math.random() * (canvas.height - wallSize * 2 - charHeight)), // Keep within bounds
-						image: imageName,
-						imagePath: selectedImage, // Store full path for later return to pool
-						messages: [], // Array of messages with their own timeout and alpha
-						alpha: 0, // Start with 0 for fade-in
-						fadingIn: true,
-						fadingOut: false,
-						facingRight: true // Initialize facing direction
-					};
+						var charWidth = 52;
+						var charHeight = 60;
+						var wallSize = 32;
+						
+						// Generate NPC position that doesn't collide with walls
+						var npcX, npcY;
+						var maxAttempts = 20; // Maximum attempts to find a valid position
+						var attempts = 0;
+						var validPosition = false;
+						
+						while (!validPosition && attempts < maxAttempts) {
+							// Generate random position within bounds
+							npcX = wallSize + (Math.random() * (canvas.width - wallSize * 2 - charWidth));
+							npcY = wallSize + (Math.random() * (canvas.height - wallSize * 2 - charHeight));
+							
+							// Check if position collides with walls
+							if (!checkWallCollision(npcX, npcY, charWidth, charHeight)) {
+								validPosition = true;
+							}
+							
+							attempts++;
+						}
+						
+						// If no valid position found after max attempts, use a default safe position
+						if (!validPosition) {
+							npcX = canvas.width / 2 - charWidth / 2;
+							npcY = canvas.height / 2 - charHeight / 2;
+						}
+						
+						characters[userId] = {
+							x: npcX,
+							y: npcY,
+							image: imageName,
+							imagePath: selectedImage, // Store full path for later return to pool
+							messages: [], // Array of messages with their own timeout and alpha
+							alpha: 0, // Start with 0 for fade-in
+							fadingIn: true,
+							fadingOut: false,
+							facingRight: true // Initialize facing direction
+						};
 		}
 
 		// Update character messages
@@ -384,6 +463,10 @@ var update = function (modifier) {
 	var heroHeight = 60;
 	var wallSize = 32;
 	
+	// Store original position for collision detection
+	var originalX = hero.x;
+	var originalY = hero.y;
+	
 	if (38 in keysDown) { // Player holding up
 		hero.y = Math.max(wallSize, hero.y - hero.speed * modifier);
 	}
@@ -397,6 +480,13 @@ var update = function (modifier) {
 	if (39 in keysDown) { // Player holding right
 		hero.x = Math.min(canvas.width - wallSize - heroWidth, hero.x + hero.speed * modifier);
 		hero.facingRight = true; // Face right
+	}
+	
+	// Check wall collision and revert if collision
+	if (checkWallCollision(hero.x, hero.y, heroWidth, heroHeight)) {
+		// Revert to original position
+		hero.x = originalX;
+		hero.y = originalY;
 	}
 
 	// Update characters
@@ -492,10 +582,30 @@ var update = function (modifier) {
 					var charHeight = 60;
 					var wallSize = 32;
 					
+					// Store original position for collision detection
+					var originalCharX = character.x;
+					var originalCharY = character.y;
+					
 					character.x = Math.max(wallSize, Math.min(canvas.width - wallSize - charWidth, character.x));
 					character.y = Math.max(wallSize, Math.min(canvas.height - wallSize - charHeight, character.y));
+					
+					// Check wall collision and revert if collision
+					if (checkWallCollision(character.x, character.y, charWidth, charHeight)) {
+						// Revert to original position
+						character.x = originalCharX;
+						character.y = originalCharY;
+						// Reverse direction
+						character.movement.direction += Math.PI;
+						// Update facing direction after bounce
+						var newDeltaX = Math.cos(character.movement.direction);
+						character.facingRight = newDeltaX > 0;
+					}
 				} else {
 					// Free mode: move freely around the entire map
+					// Store original position for collision detection
+					var originalCharX = character.x;
+					var originalCharY = character.y;
+					
 					// Change direction periodically
 					if (Date.now() > character.movement.changeDirectionTime) {
 						character.movement.direction = Math.random() * Math.PI * 2;
@@ -543,6 +653,18 @@ var update = function (modifier) {
 						// Update facing direction based on new movement
 						var deltaX = Math.cos(character.movement.direction);
 						character.facingRight = deltaX > 0;
+					}
+					
+					// Check wall collision and revert if collision
+					if (checkWallCollision(character.x, character.y, charWidth, charHeight)) {
+						// Revert to original position
+						character.x = originalCharX;
+						character.y = originalCharY;
+						// Reverse direction
+						character.movement.direction += Math.PI;
+						// Update facing direction after bounce
+						var newDeltaX = Math.cos(character.movement.direction);
+						character.facingRight = newDeltaX > 0;
 					}
 				}
 			}
@@ -613,7 +735,7 @@ var update = function (modifier) {
 			}, 500);
 		} else if (currentScene === "far" 
 			&& hero.y >= sceneBoundaries.far.top && hero.y <= sceneBoundaries.far.bottom
-			&& hero.x >= sceneBoundaries.far.left && hero.x <= sceneBoundaries.far.rirht) {
+			&& hero.x >= sceneBoundaries.far.left && hero.x <= sceneBoundaries.far.right) {
 			// Switch to close scene
 			sceneTransitioning = true;
 			currentScene = "close";
@@ -629,6 +751,7 @@ var update = function (modifier) {
 
 // Draw everything
 var render = function () {
+	// Draw background
 	if (currentScene === "close" && bgReady) {
 		ctx.drawImage(bgImage, 0, 0, 512, 480);
 	} else if (currentScene === "far" && bgFarReady) {
@@ -680,6 +803,11 @@ var render = function () {
 		}
 		ctx.restore();
 		ctx.globalAlpha = 1;
+	}
+
+	// Draw far foreground blocks (only in far scene)
+	if (currentScene === "far" && bgFarBlockReady) {
+		ctx.drawImage(bgFarBlockImage, 0, 0, 512, 480);
 	}
 
 	// Draw chat bubbles on top (only in close scene)
