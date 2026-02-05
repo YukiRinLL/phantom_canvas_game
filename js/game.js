@@ -350,7 +350,7 @@ var walls = {
 		// 左侧椅子1
 		{
 			top: 740,
-			bottom: 760,
+			bottom: 782,
 			left: 145,
 			right: 190
 		},
@@ -358,7 +358,7 @@ var walls = {
 		// 左侧椅子2
 		{
 			top: 815,
-			bottom: 835,
+			bottom: 857,
 			left: 145,
 			right: 190
 		},
@@ -366,7 +366,7 @@ var walls = {
 		// 右侧椅子1
 		{
 			top: 740,
-			bottom: 760,
+			bottom: 782,
 			left: 330,
 			right: 375
 		},
@@ -374,7 +374,7 @@ var walls = {
 		// 右侧椅子2
 		{
 			top: 815,
-			bottom: 835,
+			bottom: 857,
 			left: 330,
 			right: 375
 		},
