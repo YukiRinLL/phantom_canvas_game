@@ -93,6 +93,19 @@ bgIndoorImage.onerror = function () {
 console.log("Loading indoor scene from local file...");
 bgIndoorImage.src = "images/church-indoor.png";
 
+// Indoor foreground image (blocks)
+var bgIndoorBlockReady = false;
+var bgIndoorBlockImage = new Image();
+bgIndoorBlockImage.onload = function () {
+	bgIndoorBlockReady = true;
+	console.log("✓ Loaded indoor block image from local");
+};
+bgIndoorBlockImage.onerror = function () {
+	console.log("✗ Failed to load local church-indoor-block.png");
+};
+console.log("Loading indoor block from local file...");
+bgIndoorBlockImage.src = "images/church-indoor-block.png";
+
 // Scene management
 var currentScene = "close"; // "close", "far", or "indoor"
 var sceneTransitioning = false; // Prevent multiple transitions at once
@@ -1271,6 +1284,7 @@ var render = function () {
 		ctx.fillText("Far: " + (bgFarReady ? "✓" : "✗"), 10, 100);
 		ctx.fillText("Block: " + (bgFarBlockReady ? "✓" : "✗"), 10, 115);
 		ctx.fillText("Indoor: " + (bgIndoorReady ? "✓" : "✗"), 10, 130);
+		ctx.fillText("IndoorBlock: " + (bgIndoorBlockReady ? "✓" : "✗"), 10, 145);
 		ctx.fillText("Current Scene: " + currentScene, 10, 160);
 	}
 
@@ -1383,6 +1397,15 @@ var render = function () {
 	// Draw far foreground blocks (only in far scene)
 	if (currentScene === "far" && bgFarBlockReady) {
 		ctx.drawImage(bgFarBlockImage, 0, 0, 512, 480);
+	}
+
+	// Draw indoor foreground blocks (only in indoor scene)
+	if (currentScene === "indoor" && bgIndoorBlockReady) {
+		ctx.save();
+		ctx.translate(-camera.x, -camera.y);
+		ctx.scale(indoorZoom, indoorZoom);
+		ctx.drawImage(bgIndoorBlockImage, 0, 0, sceneBoundaries.indoor.width, sceneBoundaries.indoor.height);
+		ctx.restore();
 	}
 
 	// Draw chat bubbles on top (only in close scene)
