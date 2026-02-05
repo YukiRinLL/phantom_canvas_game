@@ -158,7 +158,7 @@ var camera = {
 var indoorZoom = 1.6;
 
 // Debug mode
-var debugMode = true; // Set to true for debug info
+var debugMode = false; // Set to true for debug info
 
 // Update camera bounds based on current scene
 function updateCameraBounds() {
