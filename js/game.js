@@ -183,7 +183,7 @@ var walls = {
 		// Add far scene walls here if needed
 		{
 			top: 200,
-			bottom: 250,
+			bottom: 320,
 			left: 190,
 			right: 320
 		}
@@ -215,77 +215,150 @@ var walls = {
 			right: sceneBoundaries.indoor.width
 		},
 
-
+		// 左侧桌子
 		{
-			top: 250,
-			bottom: 300,
+			top: 340,
+			bottom: 370,
 			left: 150,
-			right: 195
+			right: 155
 		},
 
-//		// 室内墙体2 - 右侧柱子
-//		{
-//			top: 100,
-//			bottom: 400,
-//			left: 422,
-//			right: 452
-//		},
-//
-//		// 室内墙体3 - 中间隔断墙
-//		{
-//			top: 250,
-//			bottom: 350,
-//			left: 180,
-//			right: 332
-//		},
-//
-//		// 室内物品1 - 左侧桌子
-//		{
-//			top: 450,
-//			bottom: 500,
-//			left: 80,
-//			right: 180
-//		},
-//
-//		// 室内物品2 - 右侧桌子
-//		{
-//			top: 450,
-//			bottom: 500,
-//			left: 332,
-//			right: 432
-//		},
-//
-//		// 室内物品3 - 前方祭坛/柜子（下方区域）
-//		{
-//			top: 600,
-//			bottom: 700,
-//			left: 150,
-//			right: 362
-//		},
-//
-//		// 室内物品4 - 左侧书架
-//		{
-//			top: 520,
-//			bottom: 650,
-//			left: 40,
-//			right: 80
-//		},
-//
-//		// 室内物品5 - 右侧书架
-//		{
-//			top: 520,
-//			bottom: 650,
-//			left: 432,
-//			right: 472
-//		},
-//
-//		// 室内墙体4 - 上方横梁
-//		{
-//			top: 50,
-//			bottom: 80,
-//			left: 80,
-//			right: 432
-//		}
+		// 右侧桌子
+		{
+			top: 340,
+			bottom: 370,
+			left: 370,
+			right: 375
+		},
+
+		// 神像
+		{
+			top: 340,
+			bottom: 385,
+			left: 262,
+			right: 263
+		},
+
+		// 左侧神龛
+		{
+			top: 415,
+			bottom: 550,
+			left: 10,
+			right: 200
+		},
+
+		// 右侧神龛
+		{
+			top: 415,
+			bottom: 550,
+			left: 320,
+			right: 490
+		},
+
+		// 左侧水池
+		{
+			top: 415,
+			bottom: 580,
+			left: 10,
+			right: 100
+		},
+
+		// 右侧水池
+		{
+			top: 415,
+			bottom: 580,
+			left: 420,
+			right: 490
+		},
+
+		// 左侧讲台
+		{
+			top: 600,
+			bottom: 690,
+			left: 320,
+			right: 490
+		},
+
+		// 右侧管风琴
+		{
+			top: 600,
+			bottom: 690,
+			left: 10,
+			right: 200
+		},
+
+		// 左侧凸出墙壁1
+		{
+			top: 730,
+			bottom: 1200,
+			left: 30,
+			right: 68
+		},
+
+		// 左侧凸出墙壁2
+		{
+			top: 870,
+			bottom: 1200,
+			left: 30,
+			right: 190
+		},
+
+		// 右侧凸出墙壁1
+		{
+			top: 730,
+			bottom: 1200,
+			left: 450,
+			right: 600
+		},
+
+		// 右侧凸出墙壁2
+		{
+			top: 870,
+			bottom: 1200,
+			left: 330,
+			right: 600
+		},
+
+
+		// 室内墙体4 - 上方横梁
+		{
+			top: 50,
+			bottom: 305,
+			left: 10,
+			right: 500
+		},
+
+		// 左侧椅子1
+		{
+			top: 740,
+			bottom: 760,
+			left: 145,
+			right: 190
+		},
+
+		// 左侧椅子2
+		{
+			top: 815,
+			bottom: 835,
+			left: 145,
+			right: 190
+		},
+
+		// 右侧椅子1
+		{
+			top: 740,
+			bottom: 760,
+			left: 330,
+			right: 375
+		},
+
+		// 右侧椅子2
+		{
+			top: 815,
+			bottom: 835,
+			left: 330,
+			right: 375
+		},
 	]
 };
 
@@ -326,24 +399,62 @@ addEventListener("keyup", function (e) {
 }, false);
 
 // Check if a point collides with any wall in the current scene
+// Now only checks a horizontal line at the bottom of the character (feet)
 function checkWallCollision(x, y, width, height) {
 	var currentWalls = walls[currentScene] || [];
 
 	for (var i = 0; i < currentWalls.length; i++) {
 		var wall = currentWalls[i];
 
-		// Check if character's bounding box intersects with wall
+		// Check if character's feet line intersects with wall
+		// Feet line is at the bottom of the character
+		var feetY = y + height - 2; // Slightly above the very bottom
 		if (
 			x < wall.right &&
 			x + width > wall.left &&
-			y < wall.bottom &&
-			y + height > wall.top
+			feetY < wall.bottom &&
+			feetY > wall.top
 		) {
 			return true; // Collision detected
 		}
 	}
 
 	return false; // No collision
+}
+
+// Draw collision walls for debugging
+function drawCollisionWalls() {
+	var currentWalls = walls[currentScene] || [];
+	
+	for (var i = 0; i < currentWalls.length; i++) {
+		var wall = currentWalls[i];
+		ctx.save();
+		if (currentScene === "indoor") {
+			ctx.translate(-camera.x, -camera.y);
+			ctx.scale(indoorZoom, indoorZoom);
+		}
+		ctx.strokeStyle = "rgba(255, 0, 0, 0.5)";
+		ctx.lineWidth = 2;
+		ctx.strokeRect(wall.left, wall.top, wall.right - wall.left, wall.bottom - wall.top);
+		ctx.restore();
+	}
+}
+
+// Draw hero feet collision line for debugging
+function drawHeroFeetCollision() {
+	ctx.save();
+	if (currentScene === "indoor") {
+		ctx.translate(-camera.x, -camera.y);
+		ctx.scale(indoorZoom, indoorZoom);
+	}
+	var feetY = hero.y + 60 - 2; // Hero height is 60
+	ctx.strokeStyle = "rgba(0, 255, 0, 0.7)";
+	ctx.lineWidth = 2;
+	ctx.beginPath();
+	ctx.moveTo(hero.x, feetY);
+	ctx.lineTo(hero.x + 52, feetY); // Hero width is 52
+	ctx.stroke();
+	ctx.restore();
 }
 
 // Load character images
@@ -1260,6 +1371,12 @@ var render = function () {
 				ctx.fillText("Camera: x=" + Math.round(camera.x) + ", y=" + Math.round(camera.y), 10, 70);
 				ctx.fillText("Zoom: " + indoorZoom, 10, 85);
 			}
+			
+			// Draw collision walls
+			drawCollisionWalls();
+			
+			// Draw hero feet collision line
+			drawHeroFeetCollision();
 		}
 	}
 
