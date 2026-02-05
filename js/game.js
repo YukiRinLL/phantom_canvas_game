@@ -49,10 +49,12 @@ bgImage.onload = function () {
 	console.log("✓ Loaded close background image");
 };
 bgImage.onerror = function () {
-	console.log("✗ Failed to load remote church-close.png");
+	console.log("✗ Failed to load local church-close.png, trying remote...");
+	// Try remote URL if local fails
+	bgImage.src = "https://dlink.host/wx3.sinaimg.cn/large/006fhRoTly8i9ykaj3dcsj30u00u00xc.jpg";
 };
-console.log("Loading close background from remote URL...");
-bgImage.src = "https://dlink.host/wx3.sinaimg.cn/large/006fhRoTly8i9ykaj3dcsj30u00u00xc.jpg";
+console.log("Loading close background from local file...");
+bgImage.src = "images/church-close.png";
 
 // Far background image
 var bgFarReady = false;
@@ -62,10 +64,12 @@ bgFarImage.onload = function () {
 	console.log("✓ Loaded far background image");
 };
 bgFarImage.onerror = function () {
-	console.log("✗ Failed to load remote church-far.png");
+	console.log("✗ Failed to load local church-far.png, trying remote...");
+	// Try remote URL if local fails
+	bgFarImage.src = "https://dlink.host/wx1.sinaimg.cn/large/006fhRoTly8i9ykaqhl08j30u00u0n2m.jpg";
 };
-console.log("Loading far background from remote URL...");
-bgFarImage.src = "https://dlink.host/wx1.sinaimg.cn/large/006fhRoTly8i9ykaqhl08j30u00u0n2m.jpg";
+console.log("Loading far background from local file...");
+bgFarImage.src = "images/church-far.png";
 
 // Far foreground image (blocks)
 var bgFarBlockReady = false;
@@ -85,10 +89,12 @@ var bgIndoorReady = false;
 var bgIndoorImage = new Image();
 bgIndoorImage.onload = function () {
 	bgIndoorReady = true;
-	console.log("✓ Loaded indoor scene image from local");
+	console.log("✓ Loaded indoor scene image");
 };
 bgIndoorImage.onerror = function () {
-	console.log("✗ Failed to load local church-indoor.png");
+	console.log("✗ Failed to load local church-indoor.png, trying remote...");
+	// Try remote URL if local fails
+	bgIndoorImage.src = "https://dlink.host/wx4.sinaimg.cn/large/006fhRoTly8i9ykaqhl08j30u00u0n2m.jpg";
 };
 console.log("Loading indoor scene from local file...");
 bgIndoorImage.src = "images/church-indoor.png";
