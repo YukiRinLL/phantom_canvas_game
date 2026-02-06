@@ -1828,40 +1828,100 @@ var render = function () {
 		ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
 		ctx.fillRect(0, 0, canvas.width, canvas.height);
 		
-		// Draw book interface
+		// Draw book interface with pixel-style rounded corners
+		var bookX = 100;
+		var bookY = 80;
+		var bookWidth = 312;
+		var bookHeight = 320;
+		var cornerSize = 16; // Pixel corner size
+		
+		// Draw pixel-style shadow
+		ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+		ctx.fillRect(bookX + 8, bookY + 8, bookWidth, bookHeight);
+		
+		// Draw book cover (dark brown)
+		ctx.fillStyle = "#5D3A1A";
+		
+		// Draw main body
+		ctx.fillRect(bookX + cornerSize, bookY, bookWidth - cornerSize * 2, bookHeight);
+		ctx.fillRect(bookX, bookY + cornerSize, bookWidth, bookHeight - cornerSize * 2);
+		
+		// Draw pixel-style corners
 		ctx.fillStyle = "#8B4513";
-		ctx.fillRect(100, 80, 312, 320);
+		// Top-left corner
+		ctx.fillRect(bookX, bookY, cornerSize, cornerSize);
+		// Top-right corner
+		ctx.fillRect(bookX + bookWidth - cornerSize, bookY, cornerSize, cornerSize);
+		// Bottom-left corner
+		ctx.fillRect(bookX, bookY + bookHeight - cornerSize, cornerSize, cornerSize);
+		// Bottom-right corner
+		ctx.fillRect(bookX + bookWidth - cornerSize, bookY + bookHeight - cornerSize, cornerSize, cornerSize);
+		
+		// Draw book spine (darker brown)
+		ctx.fillStyle = "#4A2911";
+		ctx.fillRect(bookX, bookY, 8, bookHeight);
+		
+		// Draw paper inside with pixel-style rounded corners
+		var paperX = bookX + 20;
+		var paperY = bookY + 20;
+		var paperWidth = bookWidth - 40;
+		var paperHeight = bookHeight - 40;
+		var paperCornerSize = 12;
+		
+		// Draw paper background
 		ctx.fillStyle = "#F5DEB3";
-		ctx.fillRect(110, 90, 292, 300);
+		ctx.fillRect(paperX + paperCornerSize, paperY, paperWidth - paperCornerSize * 2, paperHeight);
+		ctx.fillRect(paperX, paperY + paperCornerSize, paperWidth, paperHeight - paperCornerSize * 2);
 		
-		// Draw title
-		ctx.fillStyle = "#8B4513";
-		ctx.font = "16px Arial";
+		// Draw paper corners
+		ctx.fillStyle = "#E8D0A9";
+		// Top-left corner
+		ctx.fillRect(paperX, paperY, paperCornerSize, paperCornerSize);
+		// Top-right corner
+		ctx.fillRect(paperX + paperWidth - paperCornerSize, paperY, paperCornerSize, paperCornerSize);
+		// Bottom-left corner
+		ctx.fillRect(paperX, paperY + paperHeight - paperCornerSize, paperCornerSize, paperCornerSize);
+		// Bottom-right corner
+		ctx.fillRect(paperX + paperWidth - paperCornerSize, paperY + paperHeight - paperCornerSize, paperCornerSize, paperCornerSize);
+		
+		// Draw title with pixel-style font
+		ctx.fillStyle = "#5D3A1A";
+		ctx.font = "bold 18px monospace";
 		ctx.textAlign = "center";
-		ctx.fillText("留言簿", 256, 120);
+		ctx.textBaseline = "middle";
+		ctx.fillText("留言簿", canvas.width / 2, bookY + 50);
 		
-		// Draw messages
+		// Draw decorative line
+		ctx.strokeStyle = "#8B4513";
+		ctx.lineWidth = 2;
+		ctx.beginPath();
+		ctx.moveTo(paperX + 20, bookY + 70);
+		ctx.lineTo(paperX + paperWidth - 20, bookY + 70);
+		ctx.stroke();
+		
+		// Draw messages with pixel-style font
 		ctx.fillStyle = "#333";
-		ctx.font = "14px Arial";
+		ctx.font = "14px monospace";
 		ctx.textAlign = "left";
 		ctx.textBaseline = "top";
 		
 		messageBook.messages.forEach(function(msg, index) {
-			var y = 150 + (index * 60);
+			var y = bookY + 90 + (index * 60);
 			if (index === messageBook.selectedIndex) {
+				// Draw selected message background
 				ctx.fillStyle = "#E6E6FA";
-				ctx.fillRect(120, y - 5, 272, 50);
+				ctx.fillRect(paperX + 10, y - 5, paperWidth - 20, 50);
 				ctx.fillStyle = "#333";
 			}
-			ctx.fillText(msg.user + ":", 130, y);
-			ctx.fillText(msg.text, 130, y + 20);
+			ctx.fillText(msg.user + ":", paperX + 20, y);
+			ctx.fillText(msg.text, paperX + 20, y + 20);
 		});
 		
-		// Draw instructions
+		// Draw instructions with pixel-style font
 		ctx.fillStyle = "#666";
-		ctx.font = "12px Arial";
+		ctx.font = "12px monospace";
 		ctx.textAlign = "center";
-		ctx.fillText("↑↓ 选择留言  |  ESC 关闭", 256, 400);
+		ctx.fillText("↑↓ 选择留言  |  ESC 关闭", canvas.width / 2, bookY + bookHeight - 30);
 	}
 
 	// Draw debug info for hero
