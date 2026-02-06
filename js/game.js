@@ -1587,10 +1587,10 @@ var render = function () {
 		ctx.save();
 		ctx.translate(-camera.x, -camera.y);
 		ctx.scale(indoorZoom, indoorZoom);
-		ctx.globalAlpha = lectern.flashAlpha * 0.7;
-		ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
+		ctx.globalAlpha = lectern.flashAlpha * 0.8;
+		ctx.fillStyle = "rgba(255, 0, 0, 0.8)";
 		ctx.beginPath();
-		ctx.arc(lectern.x + lectern.width / 2, lectern.y + lectern.height / 2, 3, 0, Math.PI * 2);
+		ctx.arc(lectern.x + lectern.width / 2, lectern.y + lectern.height / 2, 2, 0, Math.PI * 2);
 		ctx.fill();
 		ctx.restore();
 		ctx.globalAlpha = 1;
