@@ -160,6 +160,34 @@ var indoorZoom = 1.6;
 // Debug mode
 var debugMode = false; // Set to true for debug info
 
+// Interactive elements
+var interactiveElements = {
+	lectern: {
+		// 左侧讲台位置
+		x: 102,
+		y: 600,
+		width: 50,
+		height: 40,
+		flashTimer: 0,
+		flashAlpha: 0,
+		interactable: false,
+		showHint: false,
+		hintTimer: 0
+	}
+};
+
+// Message book
+var messageBook = {
+	visible: false,
+	messages: [
+		{ user: "勇者", text: "愿圣光指引你的道路！" },
+		{ user: "旅行者", text: "这里的教堂很安静..." },
+		{ user: "牧师", text: "请保持虔诚的心。" },
+		{ user: "骑士", text: "为了国王和国家！" }
+	],
+	selectedIndex: 0
+};
+
 // Update camera bounds based on current scene
 function updateCameraBounds() {
 	if (currentScene === "indoor") {
@@ -1149,8 +1177,54 @@ var update = function (modifier) {
 			updateNPCPositionsForScene();
 			// Reset transition flag after a short delay
 			setTimeout(function() {
-				sceneTransitioning = false;
+					sceneTransitioning = false;
 			}, 500);
+
+		}
+	}
+
+	// Update interactive elements
+	if (currentScene === "indoor") {
+		var lectern = interactiveElements.lectern;
+
+		// Update flash animation
+		lectern.flashTimer += modifier * 2;
+		lectern.flashAlpha = Math.sin(lectern.flashTimer * 3) * 0.5 + 1;
+
+		// Check if hero is near lectern
+		var heroCenterX = hero.x + 26;
+		var heroCenterY = hero.y + 30;
+		var lecternCenterX = lectern.x + lectern.width / 2;
+		var lecternCenterY = lectern.y + lectern.height / 2;
+		var distance = Math.sqrt(
+			Math.pow(heroCenterX - lecternCenterX, 2) +
+			Math.pow(heroCenterY - lecternCenterY, 2)
+		);
+
+		// Set interactable if within range
+		lectern.interactable = distance < 50;
+		lectern.showHint = lectern.interactable;
+
+		// Handle F key interaction
+		if (lectern.interactable && keysDown[70]) { // F key
+			// Open message book
+			messageBook.visible = true;
+			// Clear F key press
+			delete keysDown[70];
+		}
+	}
+
+	// Handle message book navigation
+	if (messageBook.visible) {
+		if (keysDown[38]) { // Up arrow
+			messageBook.selectedIndex = Math.max(0, messageBook.selectedIndex - 1);
+			delete keysDown[38];
+		} else if (keysDown[40]) { // Down arrow
+			messageBook.selectedIndex = Math.min(messageBook.messages.length - 1, messageBook.selectedIndex + 1);
+			delete keysDown[40];
+		} else if (keysDown[27]) { // Escape key
+			messageBook.visible = false;
+			delete keysDown[27];
 		}
 	}
 };
@@ -1402,6 +1476,26 @@ var render = function () {
 			ctx.restore();
 			ctx.globalAlpha = 1;
 		}
+	} else if (currentScene === "far") {
+		// Draw hero in far scene
+		if (heroReady) {
+			ctx.globalAlpha = hero.alpha;
+
+			ctx.save();
+			if (hero.facingRight === true) {
+				ctx.translate(hero.x + 26, hero.y);
+				ctx.scale(-1, 1);
+				var scale = 52 / 70;
+				var cropY = (70 - 60/scale) / 2;
+				ctx.drawImage(heroImage, 0, cropY, 70, 70 - cropY*2, -26, 0, 52, 60);
+			} else {
+				var scale = 52 / 70;
+				var cropY = (70 - 60/scale) / 2;
+				ctx.drawImage(heroImage, 0, cropY, 70, 70 - cropY*2, hero.x, hero.y, 52, 60);
+			}
+			ctx.restore();
+			ctx.globalAlpha = 1;
+		}
 	}
 
 	// Draw debug info for hero
@@ -1484,6 +1578,100 @@ var render = function () {
 			}
 		});
 	}
+
+	// Draw interactive elements (only in indoor scene)
+	if (currentScene === "indoor") {
+		var lectern = interactiveElements.lectern;
+		
+		// Draw flash animation for lectern
+		ctx.save();
+		ctx.translate(-camera.x, -camera.y);
+		ctx.scale(indoorZoom, indoorZoom);
+		ctx.globalAlpha = lectern.flashAlpha * 0.7;
+		ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
+		ctx.beginPath();
+		ctx.arc(lectern.x + lectern.width / 2, lectern.y + lectern.height / 2, 3, 0, Math.PI * 2);
+		ctx.fill();
+		ctx.restore();
+		ctx.globalAlpha = 1;
+		
+		// Draw interact hint
+		if (lectern.showHint) {
+			ctx.save();
+			ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+			ctx.fillRect(20, canvas.height - 60, 200, 40);
+			ctx.fillStyle = "white";
+			ctx.font = "14px Arial";
+			ctx.textAlign = "center";
+			ctx.textBaseline = "middle";
+			ctx.fillText("按 F 键互动", 120, canvas.height - 40);
+			ctx.restore();
+		}
+	}
+
+	// Draw message book
+	if (messageBook.visible) {
+		// Draw semi-transparent background
+		ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+		ctx.fillRect(0, 0, canvas.width, canvas.height);
+		
+		// Draw book interface
+		ctx.fillStyle = "#8B4513";
+		ctx.fillRect(100, 80, 312, 320);
+		ctx.fillStyle = "#F5DEB3";
+		ctx.fillRect(110, 90, 292, 300);
+		
+		// Draw title
+		ctx.fillStyle = "#8B4513";
+		ctx.font = "16px Arial";
+		ctx.textAlign = "center";
+		ctx.fillText("留言簿", 256, 120);
+		
+		// Draw messages
+		ctx.fillStyle = "#333";
+		ctx.font = "14px Arial";
+		ctx.textAlign = "left";
+		ctx.textBaseline = "top";
+		
+		messageBook.messages.forEach(function(msg, index) {
+			var y = 150 + (index * 60);
+			if (index === messageBook.selectedIndex) {
+				ctx.fillStyle = "#E6E6FA";
+				ctx.fillRect(120, y - 5, 272, 50);
+				ctx.fillStyle = "#333";
+			}
+			ctx.fillText(msg.user + ":", 130, y);
+			ctx.fillText(msg.text, 130, y + 20);
+		});
+		
+		// Draw instructions
+		ctx.fillStyle = "#666";
+		ctx.font = "12px Arial";
+		ctx.textAlign = "center";
+		ctx.fillText("↑↓ 选择留言  |  ESC 关闭", 256, 400);
+	}
+
+	// Draw debug info for hero
+	if (debugMode) {
+		ctx.fillStyle = "white";
+		ctx.font = "12px Arial";
+		ctx.textAlign = "left";
+		ctx.textBaseline = "top";
+		ctx.fillText("Hero: x=" + Math.round(hero.x) + ", y=" + Math.round(hero.y), 10, 10);
+		ctx.fillText("Scene: " + currentScene, 10, 25);
+		ctx.fillText("HeroReady: " + heroReady, 10, 40);
+		ctx.fillText("HeroAlpha: " + hero.alpha, 10, 55);
+		if (currentScene === "indoor") {
+			ctx.fillText("Camera: x=" + Math.round(camera.x) + ", y=" + Math.round(camera.y), 10, 70);
+			ctx.fillText("Zoom: " + indoorZoom, 10, 85);
+		}
+		
+		// Draw collision walls
+		drawCollisionWalls();
+		
+		// Draw hero feet collision line
+		drawHeroFeetCollision();
+	}
 };
 
 // Draw chat bubble
@@ -1548,7 +1736,7 @@ requestAnimationFrame = w.requestAnimationFrame || w.webkitRequestAnimationFrame
 var then = Date.now();
 loadCharacterImages();
 // Fetch chat messages initially
-fetchChatMessages();
+// fetchChatMessages();
 // Set up periodic fetching of chat messages
-setInterval(fetchChatMessages, 5000); // Every 5 seconds
+// setInterval(fetchChatMessages, 5000); // Every 5 seconds
 main();
