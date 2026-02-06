@@ -1310,45 +1310,85 @@ var render = function () {
 		ctx.restore();
 	}
 
-	// Draw characters first (only in close scene)
+	// Draw characters and hero with proper depth sorting (only in close scene)
 	if (currentScene === "close") {
+		// Create array of all characters to draw (NPCs + hero)
+		var allCharacters = [];
+
+		// Add NPCs
 		for (var userId in characters) {
 			var character = characters[userId];
 			if (characterImages[character.image] && characterImages[character.image].ready) {
+				allCharacters.push({
+					type: 'npc',
+					data: character,
+					y: character.y
+				});
+			}
+		}
+
+		// Add hero
+		if (heroReady) {
+			allCharacters.push({
+				type: 'hero',
+				data: hero,
+				y: hero.y
+			});
+		}
+
+		// Sort by y coordinate (lower y = further away = draw first)
+		allCharacters.sort(function(a, b) {
+			return a.y - b.y;
+		});
+
+		// Draw all characters in sorted order
+		for (var i = 0; i < allCharacters.length; i++) {
+			var charObj = allCharacters[i];
+			
+			if (charObj.type === 'npc') {
+				var character = charObj.data;
 				ctx.globalAlpha = character.alpha;
 
-				// Flip image if facing right
-			ctx.save();
-			if (character.facingRight === true) {
+				ctx.save();
+				if (character.facingRight === true) {
 					var imgWidth = characterImages[character.image].image.width;
-					// Translate to center of image for flipping
 					ctx.translate(character.x + imgWidth / 2, character.y);
 					ctx.scale(-1, 1);
-					// Draw image centered at origin
 					ctx.drawImage(characterImages[character.image].image, -imgWidth / 2, 0);
 				} else {
 					ctx.drawImage(characterImages[character.image].image, character.x, character.y);
 				}
 				ctx.restore();
 				ctx.globalAlpha = 1;
+			} else if (charObj.type === 'hero') {
+				ctx.globalAlpha = hero.alpha;
+
+				ctx.save();
+				if (hero.facingRight === true) {
+					ctx.translate(hero.x + 26, hero.y);
+					ctx.scale(-1, 1);
+					var scale = 52 / 70;
+					var cropY = (70 - 60/scale) / 2;
+					ctx.drawImage(heroImage, 0, cropY, 70, 70 - cropY*2, -26, 0, 52, 60);
+				} else {
+					var scale = 52 / 70;
+					var cropY = (70 - 60/scale) / 2;
+					ctx.drawImage(heroImage, 0, cropY, 70, 70 - cropY*2, hero.x, hero.y, 52, 60);
+				}
+				ctx.restore();
+				ctx.globalAlpha = 1;
 			}
 		}
-	}
+	} else if (currentScene === "indoor") {
+		// Draw hero in indoor scene (no NPCs)
+		if (heroReady) {
+			ctx.globalAlpha = hero.alpha;
 
-	// Draw hero
-	if (heroReady) {
-		ctx.globalAlpha = hero.alpha;
-
-		// Flip image if facing right
-		ctx.save();
-		if (currentScene === "indoor") {
-			// For indoor scene, draw hero at screen position
-			// Calculate screen position based on camera and hero position
+			ctx.save();
 			var screenX = (hero.x * indoorZoom) - camera.x;
 			var screenY = (hero.y * indoorZoom) - camera.y;
 
 			if (hero.facingRight === true) {
-				// Translate to center of target size for flipping
 				ctx.translate(screenX + 26, screenY);
 				ctx.scale(-1, 1);
 				var scale = 52 / 70;
@@ -1359,26 +1399,13 @@ var render = function () {
 				var cropY = (70 - 60/scale) / 2;
 				ctx.drawImage(heroImage, 0, cropY, 70, 70 - cropY*2, screenX, screenY, 52, 60);
 			}
-		} else {
-			// For other scenes, draw hero normally
-			if (hero.facingRight === true) {
-				// Translate to center of target size for flipping
-				ctx.translate(hero.x + 26, hero.y);
-				ctx.scale(-1, 1);
-				var scale = 52 / 70;
-				var cropY = (70 - 60/scale) / 2;
-				ctx.drawImage(heroImage, 0, cropY, 70, 70 - cropY*2, -26, 0, 52, 60);
-			} else {
-				var scale = 52 / 70;
-				var cropY = (70 - 60/scale) / 2;
-				ctx.drawImage(heroImage, 0, cropY, 70, 70 - cropY*2, hero.x, hero.y, 52, 60);
-			}
+			ctx.restore();
+			ctx.globalAlpha = 1;
 		}
-		ctx.restore();
-		ctx.globalAlpha = 1;
+	}
 
-		// Draw debug info for hero
-		if (debugMode) {
+	// Draw debug info for hero
+	if (debugMode) {
 			ctx.fillStyle = "white";
 			ctx.font = "12px Arial";
 			ctx.textAlign = "left";
@@ -1398,7 +1425,6 @@ var render = function () {
 			// Draw hero feet collision line
 			drawHeroFeetCollision();
 		}
-	}
 
 	// Draw far foreground blocks (only in far scene)
 	if (currentScene === "far" && bgFarBlockReady) {
