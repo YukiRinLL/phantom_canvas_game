@@ -41,76 +41,260 @@ function showDebugStatus(message) {
 	}, 2000);
 }
 
+// Resource loading management
+var resources = {
+	// Images that need to be loaded
+	images: {
+		bgImage: {
+			ready: false,
+			image: null,
+			paths: ["images/church-close.png", "https://dlink.host/wx3.sinaimg.cn/large/006fhRoTly8i9ykaj3dcsj30u00u00xc.jpg"],
+			currentPathIndex: 0,
+			name: "close background"
+		},
+		bgFarImage: {
+			ready: false,
+			image: null,
+			paths: ["images/church-far.png", "https://dlink.host/wx1.sinaimg.cn/large/006fhRoTly8i9ykaqhl08j30u00u0n2m.jpg"],
+			currentPathIndex: 0,
+			name: "far background"
+		},
+		bgFarBlockImage: {
+			ready: false,
+			image: null,
+			paths: ["images/church-far-block.png"],
+			currentPathIndex: 0,
+			name: "far block"
+		},
+		bgIndoorImage: {
+			ready: false,
+			image: null,
+			paths: ["images/church-indoor.png", "https://dlink.host/wx4.sinaimg.cn/large/006fhRoTly8i9ykaqhl08j30u00u0n2m.jpg"],
+			currentPathIndex: 0,
+			name: "indoor scene"
+		},
+		bgIndoorBlockImage: {
+			ready: false,
+			image: null,
+			paths: ["images/church-indoor-block.png"],
+			currentPathIndex: 0,
+			name: "indoor block"
+		},
+		heroImage: {
+			ready: false,
+			image: null,
+			paths: ["images/hero.png"],
+			currentPathIndex: 0,
+			name: "hero"
+		}
+	},
+	
+	// Character images (loaded later)
+	characterImages: {
+		ready: false,
+		count: 0,
+		total: 0
+	},
+	
+	// Loading status
+	loading: true,
+	loadCount: 0,
+	totalToLoad: 0,
+	loadLog: [],
+	
+	// Initialize resource loading
+	init: function() {
+		// Calculate total resources to load
+		this.totalToLoad = Object.keys(this.images).length;
+		
+		// Start loading images
+		for (var key in this.images) {
+			this.loadImage(key);
+		}
+	},
+	
+	// Load an image with fallback paths
+	loadImage: function(key) {
+		var resource = this.images[key];
+		var currentPath = resource.paths[resource.currentPathIndex];
+		
+		console.log("Loading " + resource.name + " from: " + currentPath);
+		this.addLog("Loading " + resource.name + " from: " + currentPath);
+		
+		resource.image = new Image();
+		
+		resource.image.onload = function() {
+			resource.ready = true;
+			resources.loadCount++;
+			var successMsg = "✓ Loaded " + resource.name;
+			console.log(successMsg);
+			resources.addLog(successMsg);
+			resources.checkLoadingComplete();
+		}.bind(this);
+		
+		resource.image.onerror = function() {
+			var errorMsg = "✗ Failed to load " + resource.name + " from: " + currentPath;
+			console.log(errorMsg);
+			resources.addLog(errorMsg);
+			
+			// Try next path if available
+			resource.currentPathIndex++;
+			if (resource.currentPathIndex < resource.paths.length) {
+				resources.loadImage(key);
+			} else {
+				// No more paths to try, but continue loading other resources
+				resources.loadCount++;
+				resources.checkLoadingComplete();
+			}
+		}.bind(this);
+		
+		resource.image.src = currentPath;
+	},
+	
+	// Add log message
+	addLog: function(message) {
+		this.loadLog.push(message);
+		if (this.loadLog.length > 20) {
+			this.loadLog.shift(); // Keep log size manageable
+		}
+	},
+	
+	// Check if all resources are loaded
+	checkLoadingComplete: function() {
+		// Check if all images are loaded
+		var allImagesLoaded = true;
+		for (var key in this.images) {
+			if (!this.images[key].ready) {
+				allImagesLoaded = false;
+				break;
+			}
+		}
+		
+		// Check if character images are loaded
+		var characterImagesLoaded = this.characterImages.ready;
+		
+		if (allImagesLoaded && characterImagesLoaded) {
+			this.loading = false;
+			var completeMsg = "All resources loaded! Starting game...";
+			console.log(completeMsg);
+			this.addLog(completeMsg);
+			
+			// Start the game after a short delay to show the complete message
+			setTimeout(function() {
+				startGame();
+			}, 1000);
+		}
+	},
+	
+	// Mark character images as loaded
+	markCharacterImagesLoaded: function() {
+		this.characterImages.ready = true;
+		this.checkLoadingComplete();
+	},
+	
+	// Get load progress
+	getProgress: function() {
+		var total = this.totalToLoad + 1; // +1 for character images
+		var loaded = this.loadCount + (this.characterImages.ready ? 1 : 0);
+		return Math.floor((loaded / total) * 100);
+	}
+};
+
+// Draw loading screen
+function drawLoadingScreen() {
+	// Clear canvas
+	ctx.clearRect(0, 0, canvas.width, canvas.height);
+	
+	// Draw background
+	ctx.fillStyle = "#000";
+	ctx.fillRect(0, 0, canvas.width, canvas.height);
+	
+	// Draw title
+	ctx.fillStyle = "#fff";
+	ctx.font = "24px Arial";
+	ctx.textAlign = "center";
+	ctx.fillText("Loading...", canvas.width / 2, 100);
+	
+	// Draw progress bar
+	var progress = resources.getProgress();
+	var barWidth = 300;
+	var barHeight = 20;
+	var barX = (canvas.width - barWidth) / 2;
+	var barY = 150;
+	
+	// Background of progress bar
+	ctx.fillStyle = "#333";
+	ctx.fillRect(barX, barY, barWidth, barHeight);
+	
+	// Progress
+	ctx.fillStyle = "#4CAF50";
+	ctx.fillRect(barX, barY, (barWidth * progress) / 100, barHeight);
+	
+	// Progress text
+	ctx.fillStyle = "#fff";
+	ctx.font = "14px Arial";
+	ctx.fillText(progress + "%", canvas.width / 2, barY + barHeight + 20);
+	
+	// Draw load log
+	ctx.fillStyle = "#ccc";
+	ctx.font = "12px Arial";
+	ctx.textAlign = "left";
+	ctx.textBaseline = "top";
+	
+	var logY = 220;
+	var logX = 50;
+	var maxLogLines = 10;
+	var startIndex = Math.max(0, resources.loadLog.length - maxLogLines);
+	
+	for (var i = startIndex; i < resources.loadLog.length; i++) {
+		ctx.fillText(resources.loadLog[i], logX, logY);
+		logY += 20;
+	}
+	
+	// Draw instructions
+	ctx.fillStyle = "#999";
+	ctx.font = "12px Arial";
+	ctx.textAlign = "center";
+	ctx.fillText("请稍候，游戏正在加载资源...", canvas.width / 2, canvas.height - 50);
+}
+
+// Start the game after loading
+function startGame() {
+	// Initialize game state
+	currentScene = "close";
+	
+	// Fetch chat messages initially
+	fetchChatMessages();
+	// Set up periodic fetching of chat messages
+	setInterval(fetchChatMessages, 5000); // Every 5 seconds
+	
+	// Start the main game loop
+	var then = Date.now();
+	main(then);
+}
+
 // Background image
 var bgReady = false;
-var bgImage = new Image();
-bgImage.onload = function () {
-	bgReady = true;
-	console.log("✓ Loaded close background image");
-};
-bgImage.onerror = function () {
-	console.log("✗ Failed to load local church-close.png, trying remote...");
-	// Try remote URL if local fails
-	bgImage.src = "https://dlink.host/wx3.sinaimg.cn/large/006fhRoTly8i9ykaj3dcsj30u00u00xc.jpg";
-};
-console.log("Loading close background from local file...");
-bgImage.src = "images/church-close.png";
+var bgImage = null;
 
 // Far background image
 var bgFarReady = false;
-var bgFarImage = new Image();
-bgFarImage.onload = function () {
-	bgFarReady = true;
-	console.log("✓ Loaded far background image");
-};
-bgFarImage.onerror = function () {
-	console.log("✗ Failed to load local church-far.png, trying remote...");
-	// Try remote URL if local fails
-	bgFarImage.src = "https://dlink.host/wx1.sinaimg.cn/large/006fhRoTly8i9ykaqhl08j30u00u0n2m.jpg";
-};
-console.log("Loading far background from local file...");
-bgFarImage.src = "images/church-far.png";
+var bgFarImage = null;
 
 // Far foreground image (blocks)
 var bgFarBlockReady = false;
-var bgFarBlockImage = new Image();
-bgFarBlockImage.onload = function () {
-	bgFarBlockReady = true;
-	console.log("✓ Loaded far block image from local");
-};
-bgFarBlockImage.onerror = function () {
-	console.log("✗ Failed to load local church-far-block.png");
-};
-console.log("Loading far block from local file...");
-bgFarBlockImage.src = "images/church-far-block.png";
+var bgFarBlockImage = null;
 
 // Indoor scene image
 var bgIndoorReady = false;
-var bgIndoorImage = new Image();
-bgIndoorImage.onload = function () {
-	bgIndoorReady = true;
-	console.log("✓ Loaded indoor scene image");
-};
-bgIndoorImage.onerror = function () {
-	console.log("✗ Failed to load local church-indoor.png, trying remote...");
-	// Try remote URL if local fails
-	bgIndoorImage.src = "https://dlink.host/wx4.sinaimg.cn/large/006fhRoTly8i9ykaqhl08j30u00u0n2m.jpg";
-};
-console.log("Loading indoor scene from local file...");
-bgIndoorImage.src = "images/church-indoor.png";
+var bgIndoorImage = null;
 
 // Indoor foreground image (blocks)
 var bgIndoorBlockReady = false;
-var bgIndoorBlockImage = new Image();
-bgIndoorBlockImage.onload = function () {
-	bgIndoorBlockReady = true;
-	console.log("✓ Loaded indoor block image from local");
-};
-bgIndoorBlockImage.onerror = function () {
-	console.log("✗ Failed to load local church-indoor-block.png");
-};
-console.log("Loading indoor block from local file...");
-bgIndoorBlockImage.src = "images/church-indoor-block.png";
+var bgIndoorBlockImage = null;
+
+// Initialize resource loading
+resources.init();
 
 // Scene management
 var currentScene = "close"; // "close", "far", or "indoor"
@@ -180,10 +364,8 @@ var interactiveElements = {
 var messageBook = {
 	visible: false,
 	messages: [
-		{ user: "勇者", text: "愿圣光指引你的道路！" },
-		{ user: "旅行者", text: "这里的教堂很安静..." },
-		{ user: "牧师", text: "请保持虔诚的心。" },
-		{ user: "骑士", text: "为了国王和国家！" }
+		{ user: "Yuki", text: "留言簿功能还没做好" },
+		{ user: "Seka", text: "这里很安静..." }
 	],
 	selectedIndex: 0
 };
@@ -419,11 +601,7 @@ var availableImagePaths = [];
 
 // Hero image
 var heroReady = false;
-var heroImage = new Image();
-heroImage.onload = function () {
-	heroReady = true;
-};
-heroImage.src = "images/hero.png";
+var heroImage = null;
 
 // Hero object
 var hero = {
@@ -535,8 +713,14 @@ function loadCharacterImages() {
 		"images/jobs/Tank/Paladin.png",
 		"images/jobs/Tank/Warrior.png"
 	];
+	
+	// Update resource count
+	resources.characterImages.total = imagePaths.length;
+	resources.characterImages.count = 0;
+	
 	// Initialize available image paths pool
 	availableImagePaths = [...imagePaths];
+	
 	// Load images
 	imagePaths.forEach(function (path) {
 		var imageName = path.split('/').pop();
@@ -544,9 +728,27 @@ function loadCharacterImages() {
 			ready: false,
 			image: new Image()
 		};
+		
 		characterImages[imageName].image.onload = function () {
 			characterImages[imageName].ready = true;
+			resources.characterImages.count++;
+			
+			// Check if all character images are loaded
+			if (resources.characterImages.count === resources.characterImages.total) {
+				resources.markCharacterImagesLoaded();
+			}
 		};
+		
+		characterImages[imageName].image.onerror = function () {
+			console.log("✗ Failed to load character image:", path);
+			resources.characterImages.count++;
+			
+			// Check if all character images are loaded
+			if (resources.characterImages.count === resources.characterImages.total) {
+				resources.markCharacterImagesLoaded();
+			}
+		};
+		
 		characterImages[imageName].image.src = path;
 	});
 }
@@ -1718,25 +1920,61 @@ function drawChatBubble(x, y, text) {
 }
 
 // The main game loop
-var main = function () {
+var main = function (then) {
+	// Draw loading screen if still loading
+	if (resources.loading) {
+		drawLoadingScreen();
+		requestAnimationFrame(function() {
+			main(then);
+		});
+		return;
+	}
+	
+	// Update resource references
+	if (!bgReady && resources.images.bgImage.ready) {
+		bgImage = resources.images.bgImage.image;
+		bgReady = true;
+	}
+	
+	if (!bgFarReady && resources.images.bgFarImage.ready) {
+		bgFarImage = resources.images.bgFarImage.image;
+		bgFarReady = true;
+	}
+	
+	if (!bgFarBlockReady && resources.images.bgFarBlockImage.ready) {
+		bgFarBlockImage = resources.images.bgFarBlockImage.image;
+		bgFarBlockReady = true;
+	}
+	
+	if (!bgIndoorReady && resources.images.bgIndoorImage.ready) {
+		bgIndoorImage = resources.images.bgIndoorImage.image;
+		bgIndoorReady = true;
+	}
+	
+	if (!bgIndoorBlockReady && resources.images.bgIndoorBlockImage.ready) {
+		bgIndoorBlockImage = resources.images.bgIndoorBlockImage.image;
+		bgIndoorBlockReady = true;
+	}
+	
+	if (!heroReady && resources.images.heroImage.ready) {
+		heroImage = resources.images.heroImage.image;
+		heroReady = true;
+	}
+	
 	var now = Date.now();
 	var delta = now - then;
 	update(delta / 1000);
 	render();
-	then = now;
+	
 	// Request to do this again ASAP
-	requestAnimationFrame(main);
+	requestAnimationFrame(function() {
+		main(now);
+	});
 };
 
 // Cross-browser support for requestAnimationFrame
 var w = window;
 requestAnimationFrame = w.requestAnimationFrame || w.webkitRequestAnimationFrame || w.msRequestAnimationFrame || w.mozRequestAnimationFrame;
 
-// Let's start the chat room!
-var then = Date.now();
+// Initialize character images loading
 loadCharacterImages();
-// Fetch chat messages initially
-// fetchChatMessages();
-// Set up periodic fetching of chat messages
-// setInterval(fetchChatMessages, 5000); // Every 5 seconds
-main();
