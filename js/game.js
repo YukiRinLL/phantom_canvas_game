@@ -296,6 +296,17 @@ var bgIndoorBlockImage = null;
 // Initialize resource loading
 resources.init();
 
+// Start temporary loading loop
+function loadingLoop() {
+	drawLoadingScreen();
+	if (resources.loading) {
+		requestAnimationFrame(loadingLoop);
+	}
+}
+
+// Start the loading loop
+loadingLoop();
+
 // Scene management
 var currentScene = "close"; // "close", "far", or "indoor"
 var sceneTransitioning = false; // Prevent multiple transitions at once
