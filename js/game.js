@@ -161,28 +161,60 @@ var resources = {
 	
 	// Check if all resources are loaded
 	checkLoadingComplete: function() {
-		// Check if all images are loaded
-		var allImagesLoaded = true;
-		for (var key in this.images) {
-			if (!this.images[key].ready) {
-				allImagesLoaded = false;
-				break;
-			}
-		}
+		// Check if all loading attempts are complete
+		var allAttemptsComplete = (this.loadCount >= this.totalToLoad);
 		
 		// Check if character images are loaded
 		var characterImagesLoaded = this.characterImages.ready;
 		
-		if (allImagesLoaded && characterImagesLoaded) {
-			this.loading = false;
-			var completeMsg = "All resources loaded! Starting game...";
-			console.log(completeMsg);
-			this.addLog(completeMsg);
+		// Only proceed if all loading attempts are complete and character images are loaded
+		if (allAttemptsComplete && characterImagesLoaded) {
+			// Check if all images are loaded successfully
+			var allImagesLoaded = true;
+			for (var key in this.images) {
+				if (!this.images[key].ready) {
+					allImagesLoaded = false;
+					break;
+				}
+			}
 			
-			// Start the game after a short delay to show the complete message
-			setTimeout(function() {
-				startGame();
-			}, 1000);
+			if (allImagesLoaded) {
+				// All resources loaded successfully
+				this.loading = false;
+				var completeMsg = "All resources loaded! Starting game...";
+				console.log(completeMsg);
+				this.addLog(completeMsg);
+				
+				// Start the game after a short delay to show the complete message
+				setTimeout(function() {
+					startGame();
+				}, 1000);
+			} else {
+				// Some resources failed to load, retry loading
+				var retryMsg = "Some resources failed to load. Retrying...";
+				console.log(retryMsg);
+				this.addLog(retryMsg);
+				
+				// Reset loading state
+				this.loadCount = 0;
+				for (var key in this.images) {
+					var resource = this.images[key];
+					resource.ready = false;
+					resource.currentPathIndex = 0; // Reset to first path
+				}
+				
+				// Reset character images loading state
+				this.characterImages.ready = false;
+				
+				// Retry loading after a short delay
+				setTimeout(function() {
+					for (var key in resources.images) {
+						resources.loadImage(key);
+					}
+					// Re-load character images
+					loadCharacterImages();
+				}, 2000);
+			}
 		}
 	},
 	
