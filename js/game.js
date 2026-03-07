@@ -300,6 +300,9 @@ function startGame() {
 	// Set up periodic fetching of chat messages
 	setInterval(fetchChatMessages, 5000); // Every 5 seconds
 	
+	// Pre-fetch messages for the message book
+	fetchMessages();
+	
 	// Start the main game loop
 	var then = Date.now();
 	main(then);
@@ -406,12 +409,110 @@ var interactiveElements = {
 // Message book
 var messageBook = {
 	visible: false,
-	messages: [
-		{ user: "Yuki", text: "留言簿功能还没做好" },
-		{ user: "Seka", text: "这里很安静..." }
-	],
-	selectedIndex: 0
+	messages: [],
+	selectedIndex: 0,
+	apiUrl: "https://dshmbsawwrbuycnivcjs.supabase.co/rest/v1/messages",
+	usersUrl: "https://dshmbsawwrbuycnivcjs.supabase.co/rest/v1/users",
+	apiKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRzaG1ic2F3d3JidXljbml2Y2pzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM5Mjg2OTAsImV4cCI6MjA2OTUwNDY5MH0.fwRJD-WuST7mCbJf9h2i2Xk0z6mtCMCeV--JGUecC6A",
+	loading: false,
+	error: null,
+	currentPage: 0,
+	messagesPerPage: 3,
+	totalPages: 1,
+	userCache: {} // Cache for usernames
 };
+
+// Fetch messages from Supabase API
+function fetchMessages() {
+	if (messageBook.loading) return;
+	
+	messageBook.loading = true;
+	messageBook.error = null;
+	
+	fetch(messageBook.apiUrl + "?apikey=" + messageBook.apiKey)
+		.then(function(response) {
+			if (!response.ok) {
+				throw new Error("Network response was not ok: " + response.statusText);
+			}
+			return response.json();
+		})
+		.then(function(messages) {
+			messageBook.messages = messages;
+			messageBook.loading = false;
+			messageBook.totalPages = Math.ceil(messages.length / messageBook.messagesPerPage);
+			messageBook.currentPage = 0;
+			messageBook.selectedIndex = 0;
+			
+			// Fetch usernames for all messages
+			var uniqueUserIds = [];
+			messages.forEach(function(msg) {
+				if (msg.legacy_user_id && !messageBook.userCache[msg.legacy_user_id]) {
+					uniqueUserIds.push(msg.legacy_user_id);
+				}
+			});
+			
+			// Fetch usernames for unique user IDs
+			var usernamePromises = uniqueUserIds.map(function(userId) {
+				return fetch(messageBook.usersUrl + "?select=username&id=eq." + userId + "&apikey=" + messageBook.apiKey)
+					.then(function(response) {
+						if (!response.ok) {
+							throw new Error("Network response was not ok: " + response.statusText);
+						}
+						return response.json();
+					})
+					.then(function(users) {
+						if (users && users.length > 0) {
+							messageBook.userCache[userId] = users[0].username;
+						}
+					})
+					.catch(function(error) {
+						console.error("Error fetching username for user " + userId + ":", error);
+					});
+			});
+			
+			// Wait for all username requests to complete
+			return Promise.all(usernamePromises);
+		})
+		.then(function() {
+			console.log("Messages loaded successfully:", messageBook.messages.length, "messages,", messageBook.totalPages, "pages");
+		})
+		.catch(function(error) {
+			console.error("Error fetching messages:", error);
+			messageBook.error = error.message;
+			messageBook.loading = false;
+		});
+}
+
+// Get current page messages
+function getCurrentPageMessages() {
+	var startIndex = messageBook.currentPage * messageBook.messagesPerPage;
+	var endIndex = startIndex + messageBook.messagesPerPage;
+	return messageBook.messages.slice(startIndex, endIndex);
+}
+
+// Wrap text to fit within specified width
+function wrapText(text, maxWidth) {
+	var chars = text.split('');
+	var lines = [];
+	var currentLine = '';
+	
+	for (var i = 0; i < chars.length; i++) {
+		var testLine = currentLine + chars[i];
+		var metrics = ctx.measureText(testLine);
+		var testWidth = metrics.width;
+		
+		if (testWidth > maxWidth && currentLine.length > 0) {
+			lines.push(currentLine);
+			currentLine = chars[i];
+		} else {
+			currentLine = testLine;
+		}
+	}
+	if (currentLine.length > 0) {
+		lines.push(currentLine);
+	}
+	return lines;
+}
 
 // Update camera bounds based on current scene
 function updateCameraBounds() {
@@ -1093,48 +1194,51 @@ var update = function (modifier) {
 	var heroHeight = 60;
 	var wallSize = 32;
 
-	// Store original position for collision detection
-	var originalX = hero.x;
-	var originalY = hero.y;
-	if (38 in keysDown || 87 in keysDown) { // Player holding up (arrow up or W)
-		if (currentScene === "indoor") {
-			hero.y = Math.max(wallSize, hero.y - hero.speed * modifier);
-		} else {
-			hero.y = Math.max(wallSize, hero.y - hero.speed * modifier);
+	// Don't move if message book is open
+	if (!messageBook.visible) {
+		// Store original position for collision detection
+		var originalX = hero.x;
+		var originalY = hero.y;
+		if (38 in keysDown || 87 in keysDown) { // Player holding up (arrow up or W)
+			if (currentScene === "indoor") {
+				hero.y = Math.max(wallSize, hero.y - hero.speed * modifier);
+			} else {
+				hero.y = Math.max(wallSize, hero.y - hero.speed * modifier);
+			}
 		}
-	}
-	if (40 in keysDown || 83 in keysDown) { // Player holding down (arrow down or S)
-		if (currentScene === "indoor") {
-			hero.y = Math.min(sceneBoundaries.indoor.height - wallSize, hero.y + hero.speed * modifier);
-		} else {
-			hero.y = Math.min(canvas.height - wallSize, hero.y + hero.speed * modifier);
+		if (40 in keysDown || 83 in keysDown) { // Player holding down (arrow down or S)
+			if (currentScene === "indoor") {
+				hero.y = Math.min(sceneBoundaries.indoor.height - wallSize, hero.y + hero.speed * modifier);
+			} else {
+				hero.y = Math.min(canvas.height - wallSize, hero.y + hero.speed * modifier);
+			}
 		}
-	}
-	if (37 in keysDown || 65 in keysDown) { // Player holding left (arrow left or A)
-		if (currentScene === "indoor") {
-			hero.x = Math.max(wallSize, hero.x - hero.speed * modifier);
-		} else {
-			hero.x = Math.max(wallSize, hero.x - hero.speed * modifier);
+		if (37 in keysDown || 65 in keysDown) { // Player holding left (arrow left or A)
+			if (currentScene === "indoor") {
+				hero.x = Math.max(wallSize, hero.x - hero.speed * modifier);
+			} else {
+				hero.x = Math.max(wallSize, hero.x - hero.speed * modifier);
+			}
+			hero.facingRight = false; // Face left
 		}
-		hero.facingRight = false; // Face left
-	}
-	if (39 in keysDown || 68 in keysDown) { // Player holding right (arrow right or D)
-		if (currentScene === "indoor") {
-			hero.x = Math.min(sceneBoundaries.indoor.width - wallSize, hero.x + hero.speed * modifier);
-		} else {
-			hero.x = Math.min(canvas.width - wallSize, hero.x + hero.speed * modifier);
+		if (39 in keysDown || 68 in keysDown) { // Player holding right (arrow right or D)
+			if (currentScene === "indoor") {
+				hero.x = Math.min(sceneBoundaries.indoor.width - wallSize, hero.x + hero.speed * modifier);
+			} else {
+				hero.x = Math.min(canvas.width - wallSize, hero.x + hero.speed * modifier);
+			}
+			hero.facingRight = true; // Face right
 		}
-		hero.facingRight = true; // Face right
-	}
-	// Update camera for indoor scene
-	if (currentScene === "indoor") {
-		updateCamera();
-	}
-	// Check wall collision and revert if collision
-	if (checkWallCollision(hero.x, hero.y, heroWidth, heroHeight)) {
-		// Revert to original position
-		hero.x = originalX;
-		hero.y = originalY;
+		// Update camera for indoor scene
+		if (currentScene === "indoor") {
+			updateCamera();
+		}
+		// Check wall collision and revert if collision
+		if (checkWallCollision(hero.x, hero.y, heroWidth, heroHeight)) {
+			// Revert to original position
+			hero.x = originalX;
+			hero.y = originalY;
+		}
 	}
 	// Update characters
 	for (var userId in characters) {
@@ -1454,6 +1558,8 @@ var update = function (modifier) {
 		if (lectern.interactable && keysDown[70]) { // F key
 			// Open message book
 			messageBook.visible = true;
+			// Fetch messages from API
+			fetchMessages();
 			// Clear F key press
 			delete keysDown[70];
 		}
@@ -1462,11 +1568,40 @@ var update = function (modifier) {
 	// Handle message book navigation
 	if (messageBook.visible) {
 		if (keysDown[38]) { // Up arrow
-			messageBook.selectedIndex = Math.max(0, messageBook.selectedIndex - 1);
+			if (messageBook.messages.length > 0) {
+				if (messageBook.selectedIndex > 0) {
+					messageBook.selectedIndex--;
+				} else if (messageBook.currentPage > 0) {
+					// Go to previous page
+					messageBook.currentPage--;
+					messageBook.selectedIndex = messageBook.messagesPerPage - 1;
+				}
+			}
 			delete keysDown[38];
 		} else if (keysDown[40]) { // Down arrow
-			messageBook.selectedIndex = Math.min(messageBook.messages.length - 1, messageBook.selectedIndex + 1);
+			if (messageBook.messages.length > 0) {
+				var currentPageMessages = getCurrentPageMessages();
+				if (messageBook.selectedIndex < currentPageMessages.length - 1) {
+					messageBook.selectedIndex++;
+				} else if (messageBook.currentPage < messageBook.totalPages - 1) {
+					// Go to next page
+					messageBook.currentPage++;
+					messageBook.selectedIndex = 0;
+				}
+			}
 			delete keysDown[40];
+		} else if (keysDown[37]) { // Left arrow
+			if (messageBook.currentPage > 0) {
+				messageBook.currentPage--;
+				messageBook.selectedIndex = 0;
+			}
+			delete keysDown[37];
+		} else if (keysDown[39]) { // Right arrow
+			if (messageBook.currentPage < messageBook.totalPages - 1) {
+				messageBook.currentPage++;
+				messageBook.selectedIndex = 0;
+			}
+			delete keysDown[39];
 		} else if (keysDown[27]) { // Escape key
 			messageBook.visible = false;
 			delete keysDown[27];
@@ -1931,29 +2066,68 @@ var render = function () {
 		ctx.lineTo(paperX + paperWidth - 20, bookY + 70);
 		ctx.stroke();
 		
+		// Draw page indicator
+		ctx.fillStyle = "#666";
+		ctx.font = "12px monospace";
+		ctx.textAlign = "right";
+		ctx.fillText("第 " + (messageBook.currentPage + 1) + "/" + messageBook.totalPages + " 页", paperX + paperWidth - 10, bookY + 65);
+		
 		// Draw messages with pixel-style font
 		ctx.fillStyle = "#333";
 		ctx.font = "14px monospace";
 		ctx.textAlign = "left";
 		ctx.textBaseline = "top";
 		
-		messageBook.messages.forEach(function(msg, index) {
-			var y = bookY + 90 + (index * 60);
-			if (index === messageBook.selectedIndex) {
-				// Draw selected message background
-				ctx.fillStyle = "#E6E6FA";
-				ctx.fillRect(paperX + 10, y - 5, paperWidth - 20, 50);
-				ctx.fillStyle = "#333";
+		if (messageBook.messages.length === 0) {
+			if (messageBook.loading) {
+				ctx.fillText("加载中...", paperX + 20, bookY + 90);
+			} else if (messageBook.error) {
+				ctx.fillStyle = "#ff0000";
+				ctx.fillText("加载失败: " + messageBook.error, paperX + 20, bookY + 90);
+			} else {
+				ctx.fillText("暂无留言", paperX + 20, bookY + 90);
 			}
-			ctx.fillText(msg.user + ":", paperX + 20, y);
-			ctx.fillText(msg.text, paperX + 20, y + 20);
-		});
+		} else {
+			var currentPageMessages = getCurrentPageMessages();
+			currentPageMessages.forEach(function(msg, index) {
+				var y = bookY + 90 + (index * 80);
+				if (index === messageBook.selectedIndex) {
+					// Draw selected message background
+					ctx.fillStyle = "#E6E6FA";
+					ctx.fillRect(paperX + 10, y - 5, paperWidth - 20, 70);
+					ctx.fillStyle = "#333";
+				}
+				
+				// Display username and message
+				var username = messageBook.userCache[msg.legacy_user_id];
+				if (username) {
+					ctx.fillText(username + ":", paperX + 20, y);
+				} else {
+					ctx.fillStyle = "#999";
+					ctx.fillText("加载用户名...", paperX + 20, y);
+					ctx.fillStyle = "#333";
+				}
+				
+				// Wrap message text
+				var messageLines = wrapText(msg.message, paperWidth - 50);
+				var messageY = y + 20;
+				for (var i = 0; i < Math.min(messageLines.length, 3); i++) {
+					ctx.fillText(messageLines[i], paperX + 20, messageY);
+					messageY += 16;
+				}
+				
+				// Show ellipsis if message is too long
+				if (messageLines.length > 3) {
+					ctx.fillText("...", paperX + 20, messageY);
+				}
+			});
+		}
 		
 		// Draw instructions with pixel-style font
 		ctx.fillStyle = "#666";
 		ctx.font = "12px monospace";
 		ctx.textAlign = "center";
-		ctx.fillText("↑↓ 选择留言  |  ESC 关闭", canvas.width / 2, bookY + bookHeight - 30);
+		ctx.fillText("↑↓ 选择留言  |  ←→ 翻页  |  ESC 关闭", canvas.width / 2, bookY + bookHeight - 30);
 	}
 
 	// Draw debug info for hero
