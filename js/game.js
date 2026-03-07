@@ -2101,19 +2101,22 @@ var render = function () {
 				// Display username and message
 				var username = messageBook.userCache[msg.legacy_user_id];
 				if (username) {
+					ctx.font = "bold 14px monospace";
 					ctx.fillText(username + ":", paperX + 20, y);
 				} else {
+					ctx.font = "bold 14px monospace";
 					ctx.fillStyle = "#999";
 					ctx.fillText("加载用户名...", paperX + 20, y);
 					ctx.fillStyle = "#333";
 				}
 				
 				// Wrap message text
+				ctx.font = "12px monospace";
 				var messageLines = wrapText(msg.message, paperWidth - 50);
 				var messageY = y + 20;
 				for (var i = 0; i < Math.min(messageLines.length, 3); i++) {
 					ctx.fillText(messageLines[i], paperX + 20, messageY);
-					messageY += 16;
+					messageY += 14;
 				}
 				
 				// Show ellipsis if message is too long
