@@ -13,7 +13,7 @@
     },
     GAME: {
       canvas: { width: 512, height: 480 },
-      pollIntervalMs: 5000,
+      pollIntervalMs: 15000,
       requestTimeoutMs: 8000,
       heroUserId: "3146672611",
       hero: {
@@ -26,6 +26,8 @@
         collision: { x: 0, y: 0, width: 52, height: 60 }
       },
       maxBubbleCount: 3,
+      maxVisibleNpcBubbles: 3,
+      npcBubbleRotationMs: 7000,
       bubbleLifetimeMs: 30000
     }
   };

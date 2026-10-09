@@ -1031,6 +1031,7 @@ function fetchChatMessages() {
 	PhantomNetworkAdapter.json(getApiUrl("onebotLatestText"), {}, "聊天请求超时")
 		.then(function (data) {
 			processChatMessages(normalizeChatMessages(data));
+			rotateNpcBubblePages();
 			reportStatus("");
 		})
 		.catch(function (error) {
@@ -1384,7 +1385,10 @@ function updateCharacters() {
 							fadingIn: true,
 							fadingOut: false,
 							facingRight: true,
-							bubbleSideProgress: npcX + charWidth / 2 < canvas.width / 2 ? 0 : 1
+							bubbleSideProgress: npcX + charWidth / 2 < canvas.width / 2 ? 0 : 1,
+							bubblePage: 0,
+							bubblePageElapsed: 0,
+							bubblePageAlpha: 1
 						};
 		}
 		// Update character messages
@@ -1493,6 +1497,13 @@ var update = function (modifier) {
 		var desiredBubbleSide = character.x + 26 < canvas.width / 2 ? 0 : 1;
 		if (character.bubbleSideProgress == null) character.bubbleSideProgress = desiredBubbleSide;
 		character.bubbleSideProgress += (desiredBubbleSide - character.bubbleSideProgress) * Math.min(1, modifier / 0.16);
+		character.bubblePageElapsed += modifier * 1000;
+		character.bubblePageAlpha = Math.min(1, character.bubblePageAlpha + modifier / 0.18);
+		if (character.bubblePageElapsed >= (gameConfig.npcBubbleRotationMs || 4000)) {
+			character.bubblePage++;
+			character.bubblePageElapsed = 0;
+			character.bubblePageAlpha = 0;
+		}
 		// Handle animation and transitions
 		if (character.fadingIn) {
 			character.alpha = Math.min(1, character.alpha + modifier * 2);
@@ -2107,16 +2118,33 @@ var render = function () {
 				var visibleBubbles = character.messages.filter(function (message) {
 					return message.alpha > 0 && !message.fadingOut;
 				});
+				var bubblePages = [];
+				var currentPage = [];
+				visibleBubbles.forEach(function (message) {
+					if (getChatBubbleLayout(message.content).lines.length > 1) {
+						if (currentPage.length) bubblePages.push(currentPage);
+						bubblePages.push([message]);
+						currentPage = [];
+					} else {
+						currentPage.push(message);
+						if (currentPage.length >= (gameConfig.maxVisibleNpcBubbles || 3)) {
+							bubblePages.push(currentPage);
+							currentPage = [];
+						}
+					}
+				});
+				if (currentPage.length) bubblePages.push(currentPage);
+				visibleBubbles = bubblePages.length ? bubblePages[character.bubblePage % bubblePages.length] : [];
 				var bubbleLayout = [];
 				var layoutY = character.y - 18;
 				for (var layoutIndex = visibleBubbles.length - 1; layoutIndex >= 0; layoutIndex--) {
 					bubbleLayout[layoutIndex] = layoutY;
-					// A one-pixel overlap removes font-metric seams between bubbles.
-					layoutY -= Math.max(0, getChatBubbleHeight(visibleBubbles[layoutIndex].content) - 1);
+					// Use the exact same layout metrics as the renderer.
+					layoutY -= getChatBubbleLayout(visibleBubbles[layoutIndex].content).height;
 				}
 				visibleBubbles.forEach(function (msg, index) {
 					if (msg.alpha > 0) {
-						ctx.globalAlpha = msg.alpha;
+						ctx.globalAlpha = msg.alpha * character.bubblePageAlpha;
 						var bubbleSide = character.bubbleSideProgress;
 						ctx.save();
 						if (currentScene === "indoor") {
@@ -2422,30 +2450,49 @@ function getChatBubbleHeight(text) {
 	return Math.min(lines.length, 3) * (ctx.font.indexOf("10px") === 0 ? 12 : 14) + 8;
 }
 
+function rotateNpcBubblePages() {
+	for (var userId in characters) {
+		var character = characters[userId];
+		character.bubblePage++;
+		character.bubblePageElapsed = 0;
+		character.bubblePageAlpha = 0;
+	}
+}
+
+function getChatBubbleLayout(text) {
+	var padding = 4;
+	var maxWidth = Math.min(180, canvas.width - 20);
+	var font = "12px Helvetica";
+	var lineHeight = 14;
+	ctx.font = font;
+	var lines = wrapText(String(text || ""), maxWidth - padding * 2);
+	if (lines.length > 1) {
+		font = "10px Helvetica";
+		lineHeight = 12;
+		ctx.font = font;
+		lines = wrapText(String(text || ""), maxWidth - padding * 2);
+	}
+	if (lines.length > 3) {
+		lines = lines.slice(0, 3);
+		lines[2] = truncateText(lines[2], maxWidth - padding * 2);
+	}
+	var textWidth = lines.reduce(function (width, line) { return Math.max(width, ctx.measureText(line).width); }, 0);
+	return { font: font, lineHeight: lineHeight, lines: lines, width: Math.min(maxWidth, textWidth + padding * 2), height: lines.length * lineHeight + padding * 2 };
+}
+
 function drawChatBubble(x, y, text, side) {
 	ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
 	ctx.strokeStyle = "rgba(0, 0, 0, 0.4)";
 	ctx.lineWidth = 2;
 	// Calculate text width
-	ctx.font = "12px Helvetica";
-	var padding = 4; // padding
-	var maxBubbleWidth = Math.min(180, canvas.width - 20);
-	var lineHeight = 14;
-	var maxLines = 3;
+	var padding = 4;
 	var bubbleY = Math.max(0, y);
-	var displayText = text;
-	var lines = wrapText(displayText, maxBubbleWidth - padding * 2);
-	if (lines.length > 1) {
-		ctx.font = "10px Helvetica";
-		lineHeight = 12;
-		lines = wrapText(displayText, maxBubbleWidth - padding * 2);
-	}
-	var truncated = lines.length > maxLines;
-	if (truncated) lines = lines.slice(0, maxLines);
-	if (truncated) lines[maxLines - 1] = truncateText(lines[maxLines - 1], maxBubbleWidth - padding * 2);
-	var textWidth = lines.reduce(function (width, line) { return Math.max(width, ctx.measureText(line).width); }, 0);
-	var bubbleWidth = Math.min(maxBubbleWidth, textWidth + padding * 2);
-	var bubbleHeight = lines.length * lineHeight + padding * 2;
+	var layout = getChatBubbleLayout(text);
+	ctx.font = layout.font;
+	var lines = layout.lines;
+	var lineHeight = layout.lineHeight;
+	var bubbleWidth = layout.width;
+	var bubbleHeight = layout.height;
 	var bubbleSide = typeof side === "number" ? side : (side === "left" ? 1 : 0);
 	var bubbleX = x - bubbleWidth * bubbleSide;
 	// Keep a normal-length bubble readable by moving it to the actor's left
