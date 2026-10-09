@@ -1487,7 +1487,7 @@ var update = function (modifier) {
 	var wallSize = 32;
 
 	// Don't move if message book is open
-	if (!messageBook.visible) {
+	if (!messageBook.visible && !musicPlayer.visible) {
 		var allowArrowMovement = !systemNotice.visible;
 		var moveX = (keysDown[68] || (allowArrowMovement && keysDown[39]) ? 1 : 0) - (keysDown[65] || (allowArrowMovement && keysDown[37]) ? 1 : 0);
 		var moveY = (keysDown[83] || (allowArrowMovement && keysDown[40]) ? 1 : 0) - (keysDown[87] || (allowArrowMovement && keysDown[38]) ? 1 : 0);
@@ -2643,13 +2643,16 @@ function drawMusicPlayer() {
 	ctx.fillRect(panelX + 1, panelY + 1, panelWidth - 2, 50);
 	ctx.fillStyle = UI_THEME.accent;
 	ctx.font = "bold 15px " + UI_THEME.font;
-	ctx.textAlign = "left";
+	ctx.textAlign = "center";
 	ctx.textBaseline = "middle";
-	ctx.fillText("管弦乐琴 · PHANTOM RECORDS", panelX + 22, panelY + 27);
+	ctx.fillText("管弦乐琴", panelX + panelWidth / 2, panelY + 25);
 	ctx.fillStyle = UI_THEME.muted;
+	ctx.textAlign = "left";
+	ctx.font = "bold 9px " + UI_THEME.font;
+	ctx.fillText("RECORDS", panelX + panelWidth / 2 + 48, panelY + 25);
 	ctx.textAlign = "right";
-	ctx.font = "10px " + UI_THEME.font;
-	ctx.fillText("ESC 关闭", panelX + panelWidth - 22, panelY + 27);
+	ctx.font = "9px " + UI_THEME.font;
+	ctx.fillText("ESC 关闭", panelX + panelWidth - 18, panelY + 38);
 	var leftX = panelX + 18;
 	var leftWidth = 150;
 	var lyricX = leftX + leftWidth + 18;
