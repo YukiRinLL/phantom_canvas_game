@@ -1,0 +1,14 @@
+{
+  "name": "phantom-canvas-game",
+  "version": "0.2.0",
+  "private": true,
+  "description": "工程化的 Canvas 聊天驱动游戏 demo",
+  "scripts": {
+    "config": "node scripts/generate-config.js",
+    "dev": "npm run config && npx serve .",
+    "build": "npm run config && npm run check",
+    "check": "node --check scripts/generate-config.js && node --check js/config.js && node --check js/engine-utils.js && node --check js/game.js",
+    "test": "node --test test/**/*.test.js"
+  },
+  "engines": { "node": ">=18" }
+}

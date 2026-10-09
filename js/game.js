@@ -1,9 +1,19 @@
-// Create the canvas
-var canvas = document.createElement("canvas");
+// The host page owns the canvas so the renderer remains embeddable and responsive.
+var canvas = document.getElementById("game-canvas") || document.createElement("canvas");
 var ctx = canvas.getContext("2d");
-canvas.width = 512;
-canvas.height = 480;
-document.body.appendChild(canvas);
+var appConfig = window.APP_CONFIG;
+var gameConfig = appConfig.GAME;
+canvas.width = gameConfig.canvas.width;
+canvas.height = gameConfig.canvas.height;
+var runtimeStatus = document.getElementById("runtime-status");
+
+function reportStatus(message, isError) {
+	if (runtimeStatus) {
+		runtimeStatus.textContent = message || "";
+		runtimeStatus.style.color = isError ? "#ff8a8a" : "#ffd166";
+	}
+	if (isError) console.warn("[Phantom] " + message);
+}
 
 // Debug mode keyboard toggle (F12 key)
 addEventListener("keydown", function (e) {
@@ -191,11 +201,11 @@ var resources = {
 				}, 1000);
 			} else {
 				// Some resources failed to load, retry loading
-				var retryMsg = "Some resources failed to load. Retrying...";
+				var retryMsg = "Some resources failed to load. Continuing with fallbacks.";
 				console.log(retryMsg);
 				this.addLog(retryMsg);
 				
-				// Reset loading state
+				/* Reset loading state
 				this.loadCount = 0;
 				for (var key in this.images) {
 					var resource = this.images[key];
@@ -213,7 +223,9 @@ var resources = {
 					}
 					// Re-load character images
 					loadCharacterImages();
-				}, 2000);
+				}, 2000); */
+				this.loading = false;
+				setTimeout(startGame, 0);
 			}
 		}
 	},
@@ -292,13 +304,15 @@ function drawLoadingScreen() {
 
 // Start the game after loading
 function startGame() {
+	if (window.__phantomStarted) return;
+	window.__phantomStarted = true;
 	// Initialize game state
 	currentScene = "close";
 	
 	// Fetch chat messages initially
 	fetchChatMessages();
 	// Set up periodic fetching of chat messages
-	setInterval(fetchChatMessages, 5000); // Every 5 seconds
+	setInterval(fetchChatMessages, gameConfig.pollIntervalMs || 5000);
 	
 	// Pre-fetch messages for the message book
 	fetchMessages();
@@ -411,9 +425,9 @@ var messageBook = {
 	visible: false,
 	messages: [],
 	selectedIndex: 0,
-	apiUrl: "https://dshmbsawwrbuycnivcjs.supabase.co/rest/v1/messages",
-	usersUrl: "https://dshmbsawwrbuycnivcjs.supabase.co/rest/v1/users",
-	apiKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRzaG1ic2F3d3JidXljbml2Y2pzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM5Mjg2OTAsImV4cCI6MjA2OTUwNDY5MH0.fwRJD-WuST7mCbJf9h2i2Xk0z6mtCMCeV--JGUecC6A",
+	apiUrl: buildSupabaseQueryUrl("messages", "*", {}),
+	usersUrl: appConfig.SUPABASE_URL + "/rest/v1/users",
+	apiKey: appConfig.ANON_KEY || "",
 	loading: false,
 	error: null,
 	currentPage: 0,
@@ -425,14 +439,19 @@ var messageBook = {
 // Fetch messages from Supabase API
 function fetchMessages() {
 	if (messageBook.loading) return;
+	if (!messageBook.apiUrl) {
+		messageBook.error = "未配置留言簿接口";
+		reportStatus("留言簿接口未配置，可通过 URL 参数 messagesApi 配置", false);
+		return;
+	}
 	
 	messageBook.loading = true;
 	messageBook.error = null;
 	
-	fetch(messageBook.apiUrl + "?apikey=" + messageBook.apiKey)
+	PhantomEngine.withTimeout(fetch(messageBook.apiUrl, { headers: getMessageApiHeaders() }), gameConfig.requestTimeoutMs || 8000, "留言簿请求超时")
 		.then(function(response) {
 			if (!response.ok) {
-				throw new Error("Network response was not ok: " + response.statusText);
+				throw new Error("留言簿接口返回 " + response.status + " " + response.statusText);
 			}
 			return response.json();
 		})
@@ -453,10 +472,11 @@ function fetchMessages() {
 			
 			// Fetch usernames for unique user IDs
 			var usernamePromises = uniqueUserIds.map(function(userId) {
-				return fetch(messageBook.usersUrl + "?select=username&id=eq." + userId + "&apikey=" + messageBook.apiKey)
+				if (!messageBook.usersUrl) return Promise.resolve([]);
+				return PhantomEngine.withTimeout(fetch(messageBook.usersUrl + "?select=username&id=eq." + encodeURIComponent(userId), { headers: getMessageApiHeaders() }), gameConfig.requestTimeoutMs || 8000, "用户名请求超时")
 					.then(function(response) {
 						if (!response.ok) {
-							throw new Error("Network response was not ok: " + response.statusText);
+							throw new Error("用户接口返回 " + response.status + " " + response.statusText);
 						}
 						return response.json();
 					})
@@ -476,8 +496,9 @@ function fetchMessages() {
 		.then(function() {
 			console.log("Messages loaded successfully:", messageBook.messages.length, "messages,", messageBook.totalPages, "pages");
 		})
-		.catch(function(error) {
+	.catch(function(error) {
 			console.error("Error fetching messages:", error);
+			reportStatus("留言簿加载失败: " + error.message, true);
 			messageBook.error = error.message;
 			messageBook.loading = false;
 		});
@@ -899,20 +920,33 @@ function loadCharacterImages() {
 
 // Fetch chat messages
 function fetchChatMessages() {
-	fetch('https://phantoms-backend.onrender.com/onebot/latest/text')
+	PhantomEngine.withTimeout(fetch(getApiUrl("onebotLatestText")), gameConfig.requestTimeoutMs || 8000, "聊天请求超时")
 		.then(function (response) {
+			if (!response.ok) throw new Error("聊天接口返回 " + response.status);
 			return response.json();
 		})
 		.then(function (data) {
 			processChatMessages(data);
+			reportStatus("");
 		})
 		.catch(function (error) {
 			console.error('Error fetching chat messages:', error);
+			reportStatus("聊天连接不可用: " + error.message, true);
 		});
+}
+
+// Supabase accepts these headers when configured, but the public endpoint can
+// also be used without them when its RLS/API gateway allows anonymous reads.
+function getMessageApiHeaders() {
+	return getSupabaseConfig().headers;
 }
 
 // Process chat messages
 function processChatMessages(messages) {
+	if (!Array.isArray(messages)) {
+		console.warn("Ignoring malformed chat response", messages);
+		return;
+	}
 	// Save current messages as previous for comparison
 	previousChatMessages = [...chatMessages];
 
@@ -924,6 +958,7 @@ function processChatMessages(messages) {
 
 // Parse message content
 function parseMessageContent(message) {
+	if (window.PhantomEngine) return PhantomEngine.normalizeMessage(message);
 	// First try to remove the entire prefix
 	var cleanMessage = message.replace(/^\{type=text, data=\{text=/, '');
 	// Remove any trailing } characters
@@ -2242,7 +2277,7 @@ var main = function (then) {
 	}
 	
 	var now = Date.now();
-	var delta = now - then;
+	var delta = Math.min(now - then, 100);
 	update(delta / 1000);
 	render();
 	

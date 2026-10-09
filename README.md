@@ -1,6 +1,57 @@
-# Phantom Canvas Chat Room
+# Phantom Canvas
 
-A Canvas-based online chat room game where characters appear and move based on real-time chat messages from an API.
+一个由实时聊天驱动的 Canvas 游戏实验项目。当前版本保留原 demo 的教堂场景、NPC、场景切换、碰撞、留言簿和调试能力，同时增加可配置、可测试的工程基础。
+
+## 快速开始
+
+项目是无构建依赖的原生 Web 应用，建议使用 Node 18+。
+
+```bash
+npx serve .
+# 或 python -m http.server 8000
+```
+
+推荐通过环境变量生成浏览器运行时配置：
+
+```bash
+copy .env.example .env
+npm run config
+npx serve .
+```
+
+Windows PowerShell 也可以直接设置当前终端的环境变量：
+
+`npm run dev` 会先生成配置再启动静态服务器。配置优先级为：当前进程环境变量 > 根目录 `.env` > 本地 `config.local.js` > 代码默认值。生成器会读取 `.env` 文件，PowerShell 中也可以直接设置当前终端环境变量：
+
+```powershell
+$env:PHANTOM_SUPABASE_ANON_KEY = "你的 anon key"
+npm run dev
+```
+
+注意：前端项目的环境变量会在生成阶段写入 `js/config.runtime.js` 并发送给浏览器。Supabase anon key 只能依靠 Supabase RLS 限制权限，不能当作服务器私密凭据。
+
+然后访问 `http://localhost:3000`（或 Python server 使用的端口）。
+
+校验源码和运行单元测试：
+
+```bash
+npm run check
+npm test
+```
+
+## 配置
+
+默认聊天接口仍为 `https://phantoms-backend.onrender.com/onebot/latest/text`。可用 URL 参数覆盖：
+
+`?chatApi=https%3A%2F%2Fexample.test%2Fchat&messagesApi=https%3A%2F%2Fexample.test%2Fmessages&usersApi=https%3A%2F%2Fexample.test%2Fusers`
+
+留言簿接口已按主站参考页面迁移到统一的 `APP_CONFIG` / `getSupabaseConfig()` 配置方式，使用同一个 Supabase 项目和 `messages`、`users` 表。Supabase anon key 不再硬编码到源码，请复制本地配置模板：
+
+```bash
+copy js\config.local.example.js js\config.local.js
+```
+
+然后在 `js/config.local.js` 中设置 `APP_CONFIG.ANON_KEY`。该文件已加入 `.gitignore`，不会被提交。游戏现在会像参考页面一样发送 `apikey`、`Authorization`、`Prefer` 和 `Content-Type` 请求头；如果 Supabase 项目的匿名读取策略不允许匿名访问，接口会返回 401/403，此时需要配置 anon key 或使用后端代理。
 
 ## Features
 
@@ -28,9 +79,21 @@ A Canvas-based online chat room game where characters appear and move based on r
 
 - **Canvas API**: For rendering characters, backgrounds, and chat bubbles
 - **JavaScript Game Loop**: Using `requestAnimationFrame` for smooth animation
-- **Fetch API**: For retrieving chat messages
+- **Fetch API**: For retrieving chat messages, with timeout and response validation
 - **Collision Detection**: Prevents NPCs from stacking too much
 - **Animation System**: Uses alpha values for fade effects and state transitions
+- **Runtime safety**: Clamped frame delta, malformed response handling, optional asset fallback, no infinite loading retry
+
+## 工程结构
+
+```
+index.html              页面宿主和可访问性入口
+css/game.css            响应式布局和运行时状态样式
+js/config.js            环境无关的运行时配置
+js/engine-utils.js      可独立测试的引擎纯工具
+js/game.js              当前 Canvas 游戏运行时
+test/                   Node 内置测试
+```
 
 ## Setup Instructions
 

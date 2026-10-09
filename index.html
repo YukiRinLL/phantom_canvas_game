@@ -1,10 +1,24 @@
-<!DOCTYPE html>
-<html lang="en">
-	<head>
-		<meta charset="utf-8">
-		<title>Simple Canvas Game</title>
-	</head>
-	<body>
-		<script src="js/game.js"></script>
-	</body>
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Phantom Canvas chat-driven game demo">
+  <title>Phantom Canvas</title>
+  <link rel="stylesheet" href="css/game.css">
+</head>
+<body>
+  <main id="game-shell" aria-label="Phantom Canvas 游戏">
+    <div id="game-container">
+      <canvas id="game-canvas" width="512" height="480" aria-label="游戏画布"></canvas>
+      <div id="runtime-status" role="status" aria-live="polite"></div>
+    </div>
+    <p class="game-help">方向键 / WASD 移动 · 室内靠近讲台按 F · ESC 关闭界面</p>
+  </main>
+  <script src="js/config.js"></script>
+  <script src="js/config.local.js"></script>
+  <script src="js/config.runtime.js"></script>
+  <script src="js/engine-utils.js"></script>
+  <script src="js/game.js"></script>
+</body>
 </html>
