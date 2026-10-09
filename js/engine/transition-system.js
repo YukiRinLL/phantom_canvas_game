@@ -12,5 +12,13 @@
         actor.y < rect.bottom && actor.y + actor.height > rect.top;
     }) || null;
   };
+  TransitionSystem.prototype.isSpawnSafe = function (scene, spawn, actor) {
+    return !this.find(scene, {
+      x: spawn.x,
+      y: spawn.y,
+      width: actor.width,
+      height: actor.height
+    });
+  };
   root.PhantomTransitionSystem = TransitionSystem;
 }(window));

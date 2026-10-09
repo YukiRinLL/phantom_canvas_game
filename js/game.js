@@ -398,6 +398,7 @@ loadingLoop();
 // Scene management
 var currentScene = "close"; // "close", "far", or "indoor"
 var sceneTransitioning = false; // Prevent multiple transitions at once
+var sceneTransition = { active: false, progress: 0, duration: 0.45, callback: null };
 var sceneBoundaries = {
 	close: {
 		bottom: 380, // When hero reaches y > 380 in close scene, switch to far
@@ -426,10 +427,34 @@ var sceneBoundaries = {
 
 var transitionSystem = new PhantomTransitionSystem([
 	{ id: "close-to-far", from: "close", to: "far", label: "前往远景", rect: { left: 0, top: 380, right: canvas.width, bottom: canvas.height }, spawn: { x: canvas.width / 2 - 26, y: 300 } },
-	{ id: "close-to-indoor", from: "close", to: "indoor", label: "进入教堂", rect: { left: 200, top: 0, right: 300, bottom: 100 }, spawn: { x: sceneBoundaries.indoor.width / 2 - 26, y: sceneBoundaries.indoor.height - 100 } },
+	{ id: "close-to-indoor", from: "close", to: "indoor", label: "进入教堂", rect: { left: 200, top: 0, right: 300, bottom: 100 }, spawn: { x: sceneBoundaries.indoor.width / 2 - 26, y: 760 } },
 	{ id: "far-to-close", from: "far", to: "close", label: "返回广场", rect: { left: 210, top: 250, right: 280, bottom: 280 }, spawn: { x: canvas.width / 2 - 26, y: 350 } },
 	{ id: "indoor-to-close", from: "indoor", to: "close", label: "离开教堂", rect: { left: 170, top: 850, right: 280, bottom: 960 }, spawn: { x: 224, y: 110 } }
 ]);
+
+function validateTransitionSpawns() {
+	var actor = { width: 52, height: 60 };
+	transitionSystem.definitions.forEach(function (transition) {
+		if (!transitionSystem.isSpawnSafe(transition.to, transition.spawn, actor)) {
+			console.warn("Unsafe transition spawn:", transition.id, transition.to, transition.spawn);
+		}
+	});
+}
+
+validateTransitionSpawns();
+
+function beginSceneTransition(transition) {
+	sceneTransitioning = true;
+	sceneTransition.active = true;
+	sceneTransition.progress = 0;
+	sceneTransition.callback = function () {
+		currentScene = transition.to;
+		hero.x = transition.spawn.x;
+		hero.y = transition.spawn.y;
+		updateNPCPositionsForScene();
+		if (currentScene === "indoor") updateCameraBounds();
+	};
+}
 
 // Camera/viewport management for scrolling scene
 var camera = {
@@ -1708,13 +1733,19 @@ var update = function (modifier) {
 			height: getHeroCollisionGeometry().height
 		});
 		if (transition) {
-			sceneTransitioning = true;
-			currentScene = transition.to;
-			hero.x = transition.spawn.x;
-			hero.y = transition.spawn.y;
-			updateNPCPositionsForScene();
-			if (currentScene === "indoor") updateCameraBounds();
-			setTimeout(function() { sceneTransitioning = false; }, 500);
+			beginSceneTransition(transition);
+		}
+	}
+	if (sceneTransition.active) {
+		sceneTransition.progress += modifier;
+		if (sceneTransition.progress >= sceneTransition.duration / 2 && sceneTransition.callback) {
+			sceneTransition.callback();
+			sceneTransition.callback = null;
+		}
+		if (sceneTransition.progress >= sceneTransition.duration) {
+			sceneTransition.active = false;
+			sceneTransition.progress = 0;
+			sceneTransitioning = false;
 		}
 	}
 	if (PhantomInputSystem.consume(80)) {
@@ -2329,6 +2360,17 @@ var render = function () {
 		if (messageBook.detailVisible) {
 			drawMessageDetail(getCurrentPageMessages()[messageBook.selectedIndex]);
 		}
+	}
+	if (sceneTransition.active) {
+		var halfDuration = sceneTransition.duration / 2;
+		var transitionAlpha = sceneTransition.progress < halfDuration
+			? sceneTransition.progress / halfDuration
+			: 1 - ((sceneTransition.progress - halfDuration) / halfDuration);
+		ctx.save();
+		ctx.globalAlpha = Math.max(0, Math.min(1, transitionAlpha));
+		ctx.fillStyle = "#000";
+		ctx.fillRect(0, 0, canvas.width, canvas.height);
+		ctx.restore();
 	}
 
 	// Debug is the final screen layer: it must remain visible above foregrounds
