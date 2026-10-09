@@ -463,7 +463,7 @@ var sceneBoundaries = {
 };
 
 var transitionSystem = new PhantomTransitionSystem([
-	{ id: "close-to-far", from: "close", to: "far", label: "前往远景", rect: { left: 0, top: 380, right: canvas.width, bottom: canvas.height }, spawn: { x: canvas.width / 2 - 26, y: 300 } },
+	{ id: "close-to-far", from: "close", to: "far", label: "前往远景", rect: { left: 0, top: canvas.height - 32, right: canvas.width, bottom: canvas.height }, spawn: { x: canvas.width / 2 - 26, y: 300 } },
 	{ id: "close-to-indoor", from: "close", to: "indoor", label: "进入教堂", rect: { left: 200, top: 0, right: 300, bottom: 100 }, spawn: { x: sceneBoundaries.indoor.width / 2 - 26, y: 760 } },
 	{ id: "far-to-close", from: "far", to: "close", label: "返回广场", rect: { left: 210, top: 250, right: 280, bottom: 280 }, spawn: { x: canvas.width / 2 - 26, y: 350 } },
 	{ id: "indoor-to-close", from: "indoor", to: "close", label: "离开教堂", rect: { left: 170, top: 850, right: 280, bottom: 960 }, spawn: { x: 224, y: 110 } }
@@ -683,22 +683,21 @@ function updateCamera() {
 // Wall collision detection - 新增indoor场景具体墙体和物品碰撞区域
 var walls = {
 	close: [
-		// Top wall (1/5 of screen height)
-		{
-			top: 0,
-			bottom: canvas.height / 5, // 1/5 height
-			left: 0,
-			right: canvas.width
-		}
+		// Edge blocks leave the centered indoor entrance and bottom exit open.
+		{ top: 0, bottom: canvas.height / 5, left: 0, right: 200 },
+		{ top: 0, bottom: canvas.height / 5, left: 300, right: canvas.width },
+		{ top: 0, bottom: canvas.height, left: 0, right: 32 },
+		{ top: 0, bottom: canvas.height, left: canvas.width - 32, right: canvas.width },
+		{ top: canvas.height - 32, bottom: canvas.height, left: 0, right: 210 },
+		{ top: canvas.height - 32, bottom: canvas.height, left: 280, right: canvas.width }
 	],
 	far: [
-		// Add far scene walls here if needed
-		{
-			top: 200,
-			bottom: 320,
-			left: 190,
-			right: 320
-		}
+		{ top: 0, bottom: 32, left: 0, right: canvas.width },
+		{ top: 0, bottom: canvas.height, left: 0, right: 32 },
+		{ top: 0, bottom: canvas.height, left: canvas.width - 32, right: canvas.width },
+		// The far-scene return gate is in the middle, so the bottom edge is solid.
+		{ top: canvas.height - 32, bottom: canvas.height, left: 0, right: canvas.width },
+		{ top: 200, bottom: 320, left: 190, right: 320 }
 	],
 	indoor: [
 		// 边界墙体（原有的外框墙）
@@ -1104,13 +1103,11 @@ function getHeroCollisionBox() {
 function moveHeroAxis(deltaX, deltaY, wallSize, width, height) {
 	var nextX = hero.x + deltaX;
 	var nextY = hero.y + deltaY;
-	var maxX = (currentScene === "indoor" ? sceneBoundaries.indoor.width : canvas.width) - wallSize - heroGeometry.width;
-	var maxY = (currentScene === "indoor" ? sceneBoundaries.indoor.height : canvas.height) - wallSize - heroGeometry.height;
 	var collision;
 	var collisionGeometry = getHeroCollisionGeometry();
-	// Keep the visual role inside the scene, while collision uses its foot box.
-	hero.x = Math.max(wallSize - collisionGeometry.x, Math.min(maxX, nextX));
-	hero.y = Math.max(wallSize - collisionGeometry.y, Math.min(maxY, nextY));
+	// Scene edge limits are represented by wall blocks, just like interior props.
+	hero.x = nextX;
+	hero.y = nextY;
 	collision = getHeroCollisionBox();
 	if (checkWallCollision(collision.x, collision.y, width, height)) {
 		hero.x -= deltaX;
