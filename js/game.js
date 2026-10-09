@@ -2012,6 +2012,7 @@ var render = function () {
 			if (charObj.type === 'npc') {
 				var character = charObj.data;
 				ctx.globalAlpha = character.alpha;
+				renderer.groundShadow(character.x, character.y + 47, 52, 8, character.alpha * 0.28);
 
 				ctx.save();
 				if (character.facingRight === true) {
@@ -2026,6 +2027,7 @@ var render = function () {
 				ctx.globalAlpha = 1;
 			} else if (charObj.type === 'hero') {
 				ctx.globalAlpha = hero.alpha;
+				renderer.groundShadow(hero.x, hero.y + heroGeometry.height - 8, heroGeometry.width, 8, hero.alpha * 0.3);
 
 				ctx.save();
 				drawHeroSprite(hero.x, hero.y, hero.facingRight === true);
@@ -2037,6 +2039,11 @@ var render = function () {
 		// Draw hero in indoor scene (no NPCs)
 		if (heroReady) {
 			ctx.globalAlpha = hero.alpha;
+			var indoorShadowX = hero.x * indoorZoom - camera.x;
+			var indoorShadowY = hero.y * indoorZoom - camera.y + heroGeometry.height - 8;
+			// The indoor sprite is screen-sized; its shadow must use the same
+			// screen-space dimensions instead of inheriting indoor world zoom.
+			renderer.groundShadow(indoorShadowX, indoorShadowY, heroGeometry.width, 8, hero.alpha * 0.3);
 
 			ctx.save();
 			var screenX = (hero.x * indoorZoom) - camera.x;
@@ -2051,6 +2058,7 @@ var render = function () {
 		// Draw hero in far scene
 		if (heroReady) {
 			ctx.globalAlpha = hero.alpha;
+			renderer.groundShadow(hero.x, hero.y + heroGeometry.height - 8, heroGeometry.width, 8, hero.alpha * 0.3);
 
 			ctx.save();
 			drawHeroSprite(hero.x, hero.y, hero.facingRight === true);

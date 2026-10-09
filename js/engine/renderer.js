@@ -35,5 +35,16 @@
     ctx.arc(x + size / 2, y + size / 2, size / 2 - 1, 0, Math.PI * 2);
     ctx.stroke();
   };
+  Renderer.prototype.groundShadow = function (x, y, width, height, alpha) {
+    var ctx = this.ctx;
+    ctx.save();
+    ctx.globalAlpha = alpha == null ? 0.28 : alpha;
+    ctx.fillStyle = "#120d0a";
+    ctx.beginPath();
+    // Keep the footprint width while making the shadow less like a flat line.
+    ctx.ellipse(x + width / 2, y + height, width * 0.42, Math.max(4, height * 0.22), 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  };
   root.PhantomRenderer = Renderer;
 }(window));
