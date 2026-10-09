@@ -1454,8 +1454,9 @@ var update = function (modifier) {
 
 	// Don't move if message book is open
 	if (!messageBook.visible) {
-		var moveX = (keysDown[39] || keysDown[68] ? 1 : 0) - (keysDown[37] || keysDown[65] ? 1 : 0);
-		var moveY = (keysDown[40] || keysDown[83] ? 1 : 0) - (keysDown[38] || keysDown[87] ? 1 : 0);
+		var allowArrowMovement = !systemNotice.visible;
+		var moveX = (keysDown[68] || (allowArrowMovement && keysDown[39]) ? 1 : 0) - (keysDown[65] || (allowArrowMovement && keysDown[37]) ? 1 : 0);
+		var moveY = (keysDown[83] || (allowArrowMovement && keysDown[40]) ? 1 : 0) - (keysDown[87] || (allowArrowMovement && keysDown[38]) ? 1 : 0);
 		if (moveX === 0 && moveY === 0) {
 			if (currentScene === "indoor") updateCamera();
 		} else {
@@ -1957,21 +1958,6 @@ var render = function () {
 		ctx.fillRect(0, 0, canvas.width, canvas.height);
 	}
 
-	// Draw debug info for image loading
-	if (debugMode) {
-			ctx.fillStyle = UI_THEME.text;
-			ctx.font = "10px " + UI_THEME.font;
-		ctx.textAlign = "left";
-		ctx.textBaseline = "top";
-		ctx.fillText("Image Status:", 10, 70);
-		ctx.fillText("Close: " + (bgReady ? "✓" : "✗"), 10, 85);
-		ctx.fillText("Far: " + (bgFarReady ? "✓" : "✗"), 10, 100);
-		ctx.fillText("Block: " + (bgFarBlockReady ? "✓" : "✗"), 10, 115);
-		ctx.fillText("Indoor: " + (bgIndoorReady ? "✓" : "✗"), 10, 130);
-		ctx.fillText("IndoorBlock: " + (bgIndoorBlockReady ? "✓" : "✗"), 10, 145);
-		ctx.fillText("Current Scene: " + currentScene, 10, 160);
-	}
-
 	// 调试模式下绘制indoor场景的碰撞区域（红色半透明）
 	if (debugMode && currentScene === "indoor") {
 		var currentWalls = walls[currentScene] || [];
@@ -2072,30 +2058,6 @@ var render = function () {
 			ctx.globalAlpha = 1;
 		}
 	}
-
-	// Draw debug info for hero
-	if (debugMode) {
-			ctx.fillStyle = UI_THEME.text;
-			ctx.font = "12px " + UI_THEME.font;
-			ctx.textAlign = "left";
-			ctx.textBaseline = "top";
-			ctx.fillText("Hero: x=" + Math.round(hero.x) + ", y=" + Math.round(hero.y), 10, 10);
-			ctx.fillText("Scene: " + currentScene, 10, 25);
-			ctx.fillText("HeroReady: " + heroReady, 10, 40);
-			ctx.fillText("HeroAlpha: " + hero.alpha, 10, 55);
-			if (currentScene === "indoor") {
-				ctx.fillText("Camera: x=" + Math.round(camera.x) + ", y=" + Math.round(camera.y), 10, 70);
-				ctx.fillText("Zoom: " + indoorZoom, 10, 85);
-			}
-			
-			// Draw collision walls
-			drawCollisionWalls();
-			
-			// Draw hero feet collision line
-			drawHeroFeetCollision();
-			drawHeroSpriteDebug();
-			drawSceneTransitions();
-		}
 
 	// Draw far foreground blocks (only in far scene)
 	if (currentScene === "far" && bgFarBlockReady) {
@@ -2361,27 +2323,29 @@ var render = function () {
 		}
 	}
 
-	// Draw debug info for hero
+	// Debug is the final screen layer: it must remain visible above foregrounds
+	// and in-game panels while never being transformed by the camera.
 	if (debugMode) {
-		ctx.fillStyle = "white";
-		ctx.font = "12px Arial";
+		ctx.save();
+		ctx.fillStyle = UI_THEME.text;
+		ctx.font = "12px " + UI_THEME.font;
 		ctx.textAlign = "left";
 		ctx.textBaseline = "top";
 		ctx.fillText("Hero: x=" + Math.round(hero.x) + ", y=" + Math.round(hero.y), 10, 10);
 		ctx.fillText("Scene: " + currentScene, 10, 25);
 		ctx.fillText("HeroReady: " + heroReady, 10, 40);
 		ctx.fillText("HeroAlpha: " + hero.alpha, 10, 55);
-		if (currentScene === "indoor") {
-			ctx.fillText("Camera: x=" + Math.round(camera.x) + ", y=" + Math.round(camera.y), 10, 70);
-			ctx.fillText("Zoom: " + indoorZoom, 10, 85);
-		}
-		
-		// Draw collision walls
+		ctx.fillStyle = UI_THEME.muted;
+		ctx.font = "10px " + UI_THEME.font;
+		ctx.fillText("Image: " + (bgReady ? "OK" : "--") + "  Far: " + (bgFarReady ? "OK" : "--") + "  Indoor: " + (bgIndoorReady ? "OK" : "--"), 10, 70);
+		ctx.fillText("Sprite: " + (heroImage ? heroImage.width + "x" + heroImage.height : "--"), 10, 85);
+		ctx.restore();
 		drawCollisionWalls();
-		
-		// Draw hero feet collision line
 		drawHeroFeetCollision();
+		drawHeroSpriteDebug();
+		drawSceneTransitions();
 	}
+
 };
 
 // Draw chat bubble
