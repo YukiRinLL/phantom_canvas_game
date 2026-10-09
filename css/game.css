@@ -22,11 +22,12 @@ body { display: grid; place-items: center; padding: 24px; }
 }
 #runtime-status {
   position: absolute;
-  inset: 12px 12px auto;
+  right: 12px;
+  bottom: 12px;
   min-height: 20px;
   color: #ffd166;
   font: 12px/1.4 ui-monospace, monospace;
-  text-align: left;
+  text-align: right;
   pointer-events: none;
 }
 .game-help { margin: 12px 0 0; color: #8d92a6; font-size: 12px; }

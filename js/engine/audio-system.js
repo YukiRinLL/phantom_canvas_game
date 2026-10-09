@@ -73,7 +73,24 @@
       }).filter(Boolean).sort(function (a, b) { return a.time - b.time; });
       this.lyricsLoaded = true;
       return this.lyrics;
-    }.bind(this)).catch(function () { this.lyrics = []; return this.lyrics; }.bind(this));
+    }.bind(this)).catch(function (error) {
+      this.lyrics = [];
+      throw error;
+    }.bind(this));
+  };
+  AudioSystem.prototype.preloadAssets = function (lyricsSource) {
+    var audioReady = new Promise(function (resolve, reject) {
+      var onReady = function () { cleanup(); resolve(); };
+      var onError = function () { cleanup(); reject(new Error("BGM 加载失败")); };
+      var cleanup = function () {
+        this.track.removeEventListener("canplaythrough", onReady);
+        this.track.removeEventListener("error", onError);
+      }.bind(this);
+      this.track.addEventListener("canplaythrough", onReady, { once: true });
+      this.track.addEventListener("error", onError, { once: true });
+      this.track.load();
+    }.bind(this));
+    return Promise.all([audioReady, this.loadLyrics(lyricsSource)]);
   };
   AudioSystem.prototype.getCurrentLyricIndex = function () {
     var time = this.track ? this.track.currentTime : 0;

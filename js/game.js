@@ -6,10 +6,10 @@ var gameConfig = appConfig.GAME;
 var renderer = new PhantomRenderer(ctx);
 PhantomInputSystem.init(window);
 PhantomAudioSystem.configure(gameConfig.bgm.source, gameConfig.bgm.title);
-PhantomAudioSystem.loadLyrics(gameConfig.bgm.lyrics);
 canvas.width = gameConfig.canvas.width;
 canvas.height = gameConfig.canvas.height;
 var runtimeStatus = document.getElementById("runtime-status");
+if (runtimeStatus) runtimeStatus.hidden = true;
 var UI_THEME = {
 	panel: "rgba(30, 24, 20, 0.96)",
 	panelSoft: "rgba(42, 33, 27, 0.94)",
@@ -49,9 +49,10 @@ canvas.addEventListener("click", function (event) {
 });
 
 function reportStatus(message, isError) {
-	if (runtimeStatus) {
+	if (runtimeStatus && debugMode) {
 		runtimeStatus.textContent = message || "";
 		runtimeStatus.style.color = isError ? "#ff8a8a" : "#ffd166";
+		runtimeStatus.hidden = !message;
 	}
 	if (isError) console.warn("[Phantom] " + message);
 }
@@ -69,12 +70,20 @@ addEventListener("keydown", function (e) {
 		debugMode = !debugMode;
 		console.log("Debug mode " + (debugMode ? "enabled" : "disabled"));
 		// Show debug mode status on screen briefly
-		showDebugStatus("Debug Mode: " + (debugMode ? "ON" : "OFF"));
+		if (debugMode) {
+			reportStatus("Debug Mode: ON", false);
+		} else if (runtimeStatus) {
+			runtimeStatus.textContent = "";
+			runtimeStatus.hidden = true;
+		}
 	}
 }, false);
 
 // Function to show debug status message
 function showDebugStatus(message) {
+	reportStatus(message, false);
+	return;
+/*
 	// Create temporary status element
 	var statusElement = document.createElement("div");
 	statusElement.innerHTML = message;
@@ -95,7 +104,7 @@ function showDebugStatus(message) {
 		if (statusElement.parentNode) {
 			statusElement.parentNode.removeChild(statusElement);
 		}
-	}, 2000);
+	}, 2000);*/
 }
 
 // Resource loading management
@@ -143,6 +152,13 @@ var resources = {
 			paths: [gameConfig.hero.asset],
 			currentPathIndex: 0,
 			name: "hero"
+		},
+		musicCover: {
+			ready: false,
+			image: null,
+			paths: ["audio/sonnet-phantom-cover.png"],
+			currentPathIndex: 0,
+			name: "music cover"
 		}
 	},
 	
@@ -150,7 +166,8 @@ var resources = {
 	characterImages: {
 		ready: false,
 		count: 0,
-		total: 0
+		total: 0,
+		failed: false
 	},
 	
 	// Loading status
@@ -158,16 +175,25 @@ var resources = {
 	loadCount: 0,
 	totalToLoad: 0,
 	loadLog: [],
+	fatalError: "",
 	
 	// Initialize resource loading
 	init: function() {
 		// Calculate total resources to load
-		this.totalToLoad = Object.keys(this.images).length;
+		this.totalToLoad = Object.keys(this.images).length + 2;
 		
 		// Start loading images
 		for (var key in this.images) {
 			this.loadImage(key);
 		}
+		PhantomAudioSystem.preloadAssets(gameConfig.bgm.lyrics).then(function () {
+			resources.loadCount += 2;
+			resources.addLog("Loaded BGM and lyrics");
+			resources.checkLoadingComplete();
+		}).catch(function (error) {
+			resources.fatalError = error.message;
+			resources.addLog("✗ " + error.message);
+		});
 	},
 	
 	// Load an image with fallback paths
@@ -189,7 +215,7 @@ var resources = {
 			resources.checkLoadingComplete();
 		}.bind(this);
 		
-		resource.image.onerror = function() {
+				resource.image.onerror = function() {
 			var errorMsg = "✗ Failed to load " + resource.name + " from: " + currentPath;
 			console.log(errorMsg);
 			resources.addLog(errorMsg);
@@ -235,7 +261,7 @@ var resources = {
 				}
 			}
 			
-			if (allImagesLoaded) {
+			if (allImagesLoaded && !this.characterImages.failed) {
 				// All resources loaded successfully
 				this.loading = false;
 				var completeMsg = "All resources loaded! Starting game...";
@@ -271,8 +297,7 @@ var resources = {
 					// Re-load character images
 					loadCharacterImages();
 				}, 2000); */
-				this.loading = false;
-				setTimeout(startGame, 0);
+				this.fatalError = "必需资源加载失败，请检查网络或资源文件。";
 			}
 		}
 	},
@@ -347,6 +372,10 @@ function drawLoadingScreen() {
 	ctx.font = "12px Arial";
 	ctx.textAlign = "center";
 	ctx.fillText("请稍候，游戏正在加载资源...", canvas.width / 2, canvas.height - 50);
+	if (resources.fatalError) {
+		ctx.fillStyle = "#ff9a8f";
+		ctx.fillText(resources.fatalError, canvas.width / 2, canvas.height - 28);
+	}
 }
 
 // Start the game after loading
@@ -1033,8 +1062,9 @@ function loadCharacterImages() {
 			}
 		};
 		
-		characterImages[imageName].image.onerror = function () {
+				characterImages[imageName].image.onerror = function () {
 			console.log("✗ Failed to load character image:", path);
+			resources.characterImages.failed = true;
 			resources.characterImages.count++;
 			
 			// Check if all character images are loaded
