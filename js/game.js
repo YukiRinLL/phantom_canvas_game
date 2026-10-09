@@ -5,6 +5,8 @@ var appConfig = window.APP_CONFIG;
 var gameConfig = appConfig.GAME;
 var renderer = new PhantomRenderer(ctx);
 PhantomInputSystem.init(window);
+PhantomAudioSystem.configure(gameConfig.bgm.source, gameConfig.bgm.title);
+PhantomAudioSystem.loadLyrics(gameConfig.bgm.lyrics);
 canvas.width = gameConfig.canvas.width;
 canvas.height = gameConfig.canvas.height;
 var runtimeStatus = document.getElementById("runtime-status");
@@ -23,6 +25,7 @@ var systemNotice = {
 	button: { x: 464, y: 5, width: 42, height: 24 },
 	scroll: 0
 };
+var musicPlayer = { visible: false, cover: null };
 
 canvas.addEventListener("click", function (event) {
 	var bounds = canvas.getBoundingClientRect();
@@ -37,6 +40,11 @@ canvas.addEventListener("click", function (event) {
 	}
 	if (messageBook && messageBook.visible && !messageBook.detailVisible) {
 		openMessageDetailAtPoint(x, y);
+	}
+	if (musicPlayer.visible && isPointInMusicPlayer(x, y)) {
+		try {
+			PhantomAudioSystem.toggle().then(function () {});
+		} catch (error) { reportStatus("音乐播放器不可用：" + error.message, true); }
 	}
 });
 
@@ -487,8 +495,22 @@ var interactiveElements = {
 		flashAlpha: 0,
 		interactable: false,
 		showHint: false,
-		hintTimer: 0
-	}
+			hintTimer: 0
+		},
+		organ: {
+			x: 320,
+			y: 600,
+			width: 170,
+			height: 90,
+			// The interaction area is broad, but the indicator is placed at the
+			// instrument's visual center, symmetric with the lectern marker.
+			pointX: 377,
+			pointY: 620,
+			flashTimer: 0,
+			flashAlpha: 0,
+			interactable: false,
+			showHint: false
+		}
 };
 
 // Message book
@@ -740,7 +762,7 @@ var walls = {
 			right: 490
 		},
 
-		// 右侧管风琴
+		// 右侧管弦乐琴
 		{
 			top: 600,
 			bottom: 690,
@@ -876,7 +898,6 @@ function checkWallCollision(x, y, width, height) {
 			return true; // Collision detected
 		}
 	}
-
 	return false; // No collision
 }
 
@@ -1781,9 +1802,35 @@ var update = function (modifier) {
 			// Clear F key press
 			delete keysDown[70];
 		}
+		var organ = interactiveElements.organ;
+		organ.flashTimer += modifier * 2;
+		organ.flashAlpha = Math.sin(organ.flashTimer * 3) * 0.5 + 1;
+		var organDistance = Math.sqrt(Math.pow(heroCenterX - (organ.x + organ.width / 2), 2) + Math.pow(heroCenterY - (organ.y + organ.height / 2), 2));
+		organ.interactable = organDistance < 70;
+		organ.showHint = organ.interactable;
+		if (organ.interactable && keysDown[70]) {
+			musicPlayer.visible = true;
+			try {
+				if (!PhantomAudioSystem.playing) PhantomAudioSystem.toggle();
+				reportStatus("音乐播放器已打开", false);
+			} catch (error) {
+				reportStatus("音乐播放器不可用：" + error.message, true);
+			}
+			delete keysDown[70];
+		}
 	}
 
 	// Handle message book navigation
+	if (musicPlayer.visible && keysDown[27]) {
+		musicPlayer.visible = false;
+		delete keysDown[27];
+	}
+	if (musicPlayer.visible && keysDown[32]) {
+		try {
+			PhantomAudioSystem.toggle().then(function () {});
+		} catch (error) { reportStatus("音乐播放器不可用：" + error.message, true); }
+		delete keysDown[32];
+	}
 	if (messageBook.visible) {
 		if (messageBook.detailVisible) {
 			if (keysDown[38]) {
@@ -2182,15 +2229,21 @@ var render = function () {
 		
 		// Draw interact hint
 		if (lectern.showHint) {
-			ctx.save();
-			ctx.fillStyle = UI_THEME.panel;
-			ctx.fillRect(20, canvas.height - 60, 200, 40);
-			ctx.fillStyle = UI_THEME.text;
-			ctx.font = "14px " + UI_THEME.font;
-			ctx.textAlign = "center";
-			ctx.textBaseline = "middle";
-			ctx.fillText("按 F 键互动", 120, canvas.height - 40);
-			ctx.restore();
+			drawInteractionHint("互动", "打开留言簿");
+		}
+		var organ = interactiveElements.organ;
+		ctx.save();
+		ctx.translate(-camera.x, -camera.y);
+		ctx.scale(indoorZoom, indoorZoom);
+		ctx.globalAlpha = organ.flashAlpha * 0.8;
+		ctx.fillStyle = "rgba(255, 0, 0, 0.8)";
+		ctx.beginPath();
+		ctx.arc(organ.pointX, organ.pointY, 2, 0, Math.PI * 2);
+		ctx.fill();
+		ctx.restore();
+		ctx.globalAlpha = 1;
+		if (organ.showHint) {
+			drawInteractionHint("音乐", "试听 / 开关 BGM");
 		}
 	}
 
@@ -2389,6 +2442,7 @@ var render = function () {
 		// Draw again after the normal UI so the transition is always visible.
 		drawPixelTransition();
 	}
+	drawMusicPlayer();
 
 	// Debug is the final screen layer: it must remain visible above foregrounds
 	// and in-game panels while never being transformed by the camera.
@@ -2538,6 +2592,232 @@ function drawMessageBookEmptyState(x, y, text) {
 	ctx.textAlign = "center";
 	ctx.textBaseline = "middle";
 	ctx.fillText(text, x + 222, y + 150);
+}
+
+function drawInteractionHint(label, action) {
+	var width = 228;
+	var height = 42;
+	var x = 20;
+	var y = canvas.height - 58;
+	ctx.save();
+	ctx.fillStyle = "rgba(25, 18, 14, 0.94)";
+	ctx.strokeStyle = UI_THEME.border;
+	ctx.lineWidth = 1;
+	ctx.beginPath();
+	ctx.roundRect(x, y, width, height, 7);
+	ctx.fill();
+	ctx.stroke();
+	ctx.fillStyle = UI_THEME.accent;
+	ctx.fillRect(x + 10, y + 9, 30, 24);
+	ctx.fillStyle = "#3b2513";
+	ctx.font = "bold 11px " + UI_THEME.font;
+	ctx.textAlign = "center";
+	ctx.textBaseline = "middle";
+	ctx.fillText("F", x + 25, y + 21);
+	ctx.textAlign = "left";
+	ctx.fillStyle = UI_THEME.text;
+	ctx.font = "bold 11px " + UI_THEME.font;
+	ctx.fillText(label, x + 52, y + 13);
+	ctx.fillStyle = UI_THEME.muted;
+	ctx.font = "10px " + UI_THEME.font;
+	ctx.fillText(action, x + 52, y + 28);
+	ctx.restore();
+}
+
+function isPointInMusicPlayer(x, y) {
+	return x >= 76 && x <= 134 && y >= 339 && y <= 397;
+}
+
+function drawMusicPlayer() {
+	if (!musicPlayer.visible) return;
+	var state = PhantomAudioSystem.getState();
+	var panelX = 10, panelY = 10, panelWidth = canvas.width - 20, panelHeight = canvas.height - 20;
+	if (!musicPlayer.cover) {
+		musicPlayer.cover = new Image();
+		musicPlayer.cover.src = "audio/sonnet-phantom-cover.png";
+	}
+	ctx.fillStyle = "rgba(8, 6, 7, 0.82)";
+	ctx.fillRect(0, 0, canvas.width, canvas.height);
+	drawRoundedPanel(panelX, panelY, panelWidth, panelHeight, "#21191a", "#c79a59");
+	drawFantasyFrame(panelX, panelY, panelWidth, panelHeight);
+	ctx.fillStyle = "#312326";
+	ctx.fillRect(panelX + 1, panelY + 1, panelWidth - 2, 50);
+	ctx.fillStyle = UI_THEME.accent;
+	ctx.font = "bold 15px " + UI_THEME.font;
+	ctx.textAlign = "left";
+	ctx.textBaseline = "middle";
+	ctx.fillText("管弦乐琴 · PHANTOM RECORDS", panelX + 22, panelY + 27);
+	ctx.fillStyle = UI_THEME.muted;
+	ctx.textAlign = "right";
+	ctx.font = "10px " + UI_THEME.font;
+	ctx.fillText("ESC 关闭", panelX + panelWidth - 22, panelY + 27);
+	var leftX = panelX + 18;
+	var leftWidth = 150;
+	var lyricX = leftX + leftWidth + 18;
+	var lyricWidth = panelX + panelWidth - 16 - lyricX;
+	var lyricContentWidth = lyricWidth - 20;
+	ctx.fillStyle = "#171113";
+	ctx.fillRect(leftX - 5, panelY + 62, leftWidth + 10, panelHeight - 76);
+	if (musicPlayer.cover.complete && musicPlayer.cover.naturalWidth) {
+		ctx.drawImage(musicPlayer.cover, leftX, panelY + 72, leftWidth, leftWidth);
+	}
+	ctx.fillStyle = UI_THEME.text;
+	ctx.font = "bold 14px " + UI_THEME.font;
+	ctx.textAlign = "left";
+	ctx.fillText(state.title, leftX, panelY + 242);
+	ctx.fillStyle = UI_THEME.muted;
+	ctx.font = "11px " + UI_THEME.font;
+	ctx.fillText("YukiRinLL", leftX, panelY + 260);
+	ctx.fillStyle = "#8f7775";
+	ctx.font = "10px " + UI_THEME.font;
+	ctx.fillText("Phantoms' Poetry Collection I", leftX, panelY + 275);
+	ctx.fillStyle = state.playing ? UI_THEME.accent : UI_THEME.muted;
+	ctx.fillText(state.playing ? "● 正在播放" : "○ 已暂停", leftX, panelY + 296);
+	ctx.fillStyle = "#574237";
+	ctx.fillRect(leftX, panelY + 314, leftWidth, 4);
+	ctx.fillStyle = UI_THEME.accent;
+	ctx.fillRect(leftX, panelY + 314, state.duration ? leftWidth * state.currentTime / state.duration : 0, 4);
+	ctx.fillStyle = "#6f5c50";
+	drawMusicSkipButton(leftX + 24, panelY + 368, false);
+	drawMusicSkipButton(leftX + 126, panelY + 368, true);
+	ctx.fillStyle = UI_THEME.accent;
+	ctx.beginPath();
+	ctx.arc(leftX + 75, panelY + 368, 29, 0, Math.PI * 2);
+	ctx.fill();
+	ctx.fillStyle = "#3b2513";
+	ctx.beginPath();
+	if (state.playing) {
+		ctx.roundRect(leftX + 67, panelY + 358, 6, 20, 2);
+		ctx.roundRect(leftX + 78, panelY + 358, 6, 20, 2);
+	} else {
+		ctx.moveTo(leftX + 70, panelY + 356);
+		ctx.lineTo(leftX + 70, panelY + 380);
+		ctx.lineTo(leftX + 88, panelY + 368);
+		ctx.closePath();
+	}
+	ctx.fill();
+	var lyricIndex = PhantomAudioSystem.getCurrentLyricIndex();
+	ctx.fillStyle = "#171113";
+	ctx.fillRect(lyricX - 10, panelY + 62, lyricWidth + 10, panelHeight - 76);
+	ctx.fillStyle = UI_THEME.accent;
+	ctx.font = "bold 11px " + UI_THEME.font;
+	ctx.textAlign = "left";
+	ctx.fillText("LYRICS / 十四行诗：幻影", lyricX, panelY + 82);
+	ctx.fillStyle = "#70565a";
+	ctx.fillRect(lyricX, panelY + 92, lyricContentWidth, 1);
+	ctx.save();
+	ctx.beginPath();
+	ctx.rect(lyricX - 2, panelY + 100, lyricContentWidth + 4, panelHeight - 116);
+	ctx.clip();
+	if (!PhantomAudioSystem.lyrics.length) {
+		ctx.fillStyle = UI_THEME.muted;
+		ctx.font = "10px " + UI_THEME.font;
+		ctx.textAlign = "center";
+		ctx.fillText("歌词加载中...", lyricX + lyricWidth / 2, panelY + 180);
+	} else {
+		var lyricLinesByIndex = PhantomAudioSystem.lyrics.map(function (line) {
+			return { english: line.english, chinese: line.chinese };
+		});
+		var activeIndex = Math.max(0, lyricIndex);
+		var lyricPositions = [];
+		var activeY = panelY + 180;
+		lyricPositions[activeIndex] = activeY;
+		for (var previousIndex = activeIndex - 1; previousIndex >= 0; previousIndex--) {
+			var previousHeight = 26 + 8;
+			activeY -= previousHeight;
+			lyricPositions[previousIndex] = activeY;
+		}
+		activeY = panelY + 180;
+		for (var nextIndex = activeIndex + 1; nextIndex < lyricLinesByIndex.length; nextIndex++) {
+			var currentHeight = 26 + 8;
+			activeY += currentHeight;
+			lyricPositions[nextIndex] = activeY;
+		}
+		PhantomAudioSystem.lyrics.forEach(function (line, index) {
+			var y = lyricPositions[index];
+			var lyricLines = lyricLinesByIndex[index];
+			ctx.fillStyle = index === lyricIndex ? UI_THEME.accent : (index < lyricIndex ? "#765e60" : "#b99fa0");
+			ctx.textAlign = "left";
+			ctx.font = (index === lyricIndex ? "bold " : "") + fitLyricFontSize(lyricLines.english, lyricContentWidth) + "px " + UI_THEME.font;
+			ctx.fillText(lyricLines.english, lyricX, y);
+			if (lyricLines.chinese) {
+				ctx.font = (index === lyricIndex ? "bold " : "") + fitLyricFontSize(lyricLines.chinese, lyricContentWidth) + "px " + UI_THEME.font;
+				ctx.fillText(lyricLines.chinese, lyricX, y + 14);
+			}
+		});
+	}
+	ctx.restore();
+}
+
+function drawFantasyFrame(x, y, width, height) {
+	ctx.save();
+	ctx.strokeStyle = "rgba(199, 154, 89, 0.5)";
+	ctx.fillStyle = "rgba(242, 196, 109, 0.8)";
+	ctx.lineWidth = 1;
+	ctx.beginPath();
+	ctx.roundRect(x + 6, y + 6, width - 12, height - 12, 9);
+	ctx.stroke();
+	drawFantasyCorner(x + 13, y + 13, 1, 1);
+	drawFantasyCorner(x + width - 13, y + 13, -1, 1);
+	drawFantasyCorner(x + 13, y + height - 13, 1, -1);
+	drawFantasyCorner(x + width - 13, y + height - 13, -1, -1);
+	var center = x + width / 2;
+	ctx.strokeStyle = "rgba(242, 196, 109, 0.8)";
+	ctx.beginPath();
+	ctx.moveTo(center - 76, y + 50);
+	ctx.quadraticCurveTo(center - 52, y + 40, center - 28, y + 50);
+	ctx.moveTo(center + 28, y + 50);
+	ctx.quadraticCurveTo(center + 52, y + 40, center + 76, y + 50);
+	ctx.stroke();
+	ctx.beginPath();
+	ctx.arc(center, y + 49, 3, 0, Math.PI * 2);
+	ctx.fill();
+	ctx.restore();
+}
+
+function drawFantasyCorner(x, y, scaleX, scaleY) {
+	ctx.save();
+	ctx.translate(x, y);
+	ctx.scale(scaleX, scaleY);
+	ctx.beginPath();
+	ctx.moveTo(0, 18);
+	ctx.quadraticCurveTo(0, 5, 12, 0);
+	ctx.quadraticCurveTo(8, 10, 18, 12);
+	ctx.moveTo(4, 14);
+	ctx.quadraticCurveTo(10, 6, 16, 5);
+	ctx.stroke();
+	ctx.beginPath();
+	ctx.arc(5, 5, 2, 0, Math.PI * 2);
+	ctx.fill();
+	ctx.restore();
+}
+
+function fitLyricFontSize(text, maxWidth) {
+	var fontSize = 11;
+	while (fontSize > 7) {
+		ctx.font = fontSize + "px " + UI_THEME.font;
+		if (ctx.measureText(text).width <= maxWidth) return fontSize;
+		fontSize -= 0.5;
+	}
+	return 7;
+}
+
+function drawMusicSkipButton(x, y, forward) {
+	ctx.save();
+	ctx.globalAlpha = 0.55;
+	ctx.fillStyle = "#756258";
+	ctx.beginPath();
+	ctx.arc(x, y, 17, 0, Math.PI * 2);
+	ctx.fill();
+	ctx.fillStyle = "#332629";
+	ctx.beginPath();
+	ctx.moveTo(forward ? x - 5 : x + 5, y - 6);
+	ctx.lineTo(forward ? x + 3 : x - 3, y);
+	ctx.lineTo(forward ? x - 5 : x + 5, y + 6);
+	ctx.closePath();
+	ctx.fill();
+	ctx.fillRect(forward ? x + 5 : x - 7, y - 7, 2, 14);
+	ctx.restore();
 }
 
 function drawSystemNotice() {

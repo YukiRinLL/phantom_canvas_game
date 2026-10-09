@@ -28,6 +28,7 @@
       maxBubbleCount: 3,
       maxVisibleNpcBubbles: 3,
       npcBubbleRotationMs: 7000,
+      bgm: { source: "audio/sonnet-phantom.mp3", lyrics: "audio/sonnet-phantom.lrc", title: "Sonnet Phantom" },
       bubbleLifetimeMs: 30000
     }
   };

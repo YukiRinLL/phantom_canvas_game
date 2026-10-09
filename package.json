@@ -7,7 +7,7 @@
     "config": "node scripts/generate-config.js",
     "dev": "npm run config && npx serve .",
     "build": "npm run config && npm run check",
-    "check": "node --check scripts/generate-config.js && node --check js/config.js && node --check js/engine-utils.js && node --check js/engine/asset-manager.js && node --check js/engine/input-system.js && node --check js/engine/network-adapter.js && node --check js/engine/scene-manager.js && node --check js/engine/transition-system.js && node --check js/engine/entity-system.js && node --check js/engine/renderer.js && node --check js/game.js",
+    "check": "node --check scripts/generate-config.js && node --check js/config.js && node --check js/engine-utils.js && node --check js/engine/asset-manager.js && node --check js/engine/input-system.js && node --check js/engine/network-adapter.js && node --check js/engine/scene-manager.js && node --check js/engine/transition-system.js && node --check js/engine/entity-system.js && node --check js/engine/renderer.js && node --check js/engine/audio-system.js && node --check js/game.js",
     "test": "node --test test/**/*.test.js"
   },
   "engines": { "node": ">=18" }

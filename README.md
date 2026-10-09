@@ -98,6 +98,8 @@ js/engine/              AssetManager、InputSystem、NetworkAdapter、SceneManag
 test/                   Node 内置测试
 ```
 
+室内管弦乐琴是 BGM 播放器，靠近后按 `F` 开关 `audio/sonnet-phantom.mp3`。浏览器首次播放音频需要用户手势。
+
 引擎模块通过浏览器全局命名空间提供基础服务，`game.js` 仅负责当前 demo 的场景规则和组合。新增功能应优先扩展对应模块，而不是继续增加全局工具函数。
 
 ## Setup Instructions
