@@ -2362,15 +2362,8 @@ var render = function () {
 		}
 	}
 	if (sceneTransition.active) {
-		var halfDuration = sceneTransition.duration / 2;
-		var transitionAlpha = sceneTransition.progress < halfDuration
-			? sceneTransition.progress / halfDuration
-			: 1 - ((sceneTransition.progress - halfDuration) / halfDuration);
-		ctx.save();
-		ctx.globalAlpha = Math.max(0, Math.min(1, transitionAlpha));
-		ctx.fillStyle = "#000";
-		ctx.fillRect(0, 0, canvas.width, canvas.height);
-		ctx.restore();
+		// Draw again after the normal UI so the transition is always visible.
+		drawPixelTransition();
 	}
 
 	// Debug is the final screen layer: it must remain visible above foregrounds
@@ -2395,8 +2388,31 @@ var render = function () {
 		drawHeroSpriteDebug();
 		drawSceneTransitions();
 	}
+	if (sceneTransition.active) drawPixelTransition();
 
 };
+
+function drawPixelTransition() {
+	var halfDuration = sceneTransition.duration / 2;
+	var phase = sceneTransition.progress < halfDuration
+		? sceneTransition.progress / halfDuration
+		: 1 - ((sceneTransition.progress - halfDuration) / halfDuration);
+	var tileSize = 16;
+	var centerX = canvas.width / 2 / tileSize;
+	var centerY = canvas.height / 2 / tileSize;
+	var maxDistance = Math.sqrt(centerX * centerX + centerY * centerY);
+	ctx.save();
+	ctx.fillStyle = "#17121b";
+	for (var row = 0; row < Math.ceil(canvas.height / tileSize); row++) {
+		for (var column = 0; column < Math.ceil(canvas.width / tileSize); column++) {
+			var distance = Math.sqrt(Math.pow(column + 0.5 - centerX, 2) + Math.pow(row + 0.5 - centerY, 2));
+			if (distance <= maxDistance * phase) {
+				ctx.fillRect(column * tileSize, row * tileSize, tileSize, tileSize);
+			}
+		}
+	}
+	ctx.restore();
+}
 
 // Draw chat bubble
 function drawChatBubble(x, y, text) {
@@ -2406,20 +2422,24 @@ function drawChatBubble(x, y, text) {
 	// Calculate text width
 	ctx.font = "12px Helvetica";
 	var padding = 4; // padding
-	var maxBubbleWidth = canvas.width - x - 10;
+	var maxBubbleWidth = canvas.width - 20;
 	var bubbleHeight = 20; // bubble height
-	// Adjust position to avoid off-screen
-	var bubbleX = Math.max(0, x);
+	var bubbleX = x;
 	var bubbleY = Math.max(0, y);
-	// Check if text is too long and replace with "..."
 	var displayText = text;
 	var textWidth = ctx.measureText(displayText).width;
 
 	if (textWidth + padding * 2 > maxBubbleWidth) {
-		displayText = "...";
+		displayText = truncateText(displayText, maxBubbleWidth - padding * 2);
 		textWidth = ctx.measureText(displayText).width;
 	}
 	var bubbleWidth = textWidth + padding * 2;
+	// Keep a normal-length bubble readable by moving it to the actor's left
+	// when the actor is too close to the right edge.
+	if (bubbleX + bubbleWidth > canvas.width - 10) {
+		bubbleX = x - bubbleWidth;
+	}
+	bubbleX = Math.max(10, Math.min(canvas.width - bubbleWidth - 10, bubbleX));
 	// Draw bubble with rounded corners (compatible with all browsers)
 	ctx.beginPath();
 	var radius = 8; // Smaller radius
