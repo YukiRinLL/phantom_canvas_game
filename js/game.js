@@ -20,7 +20,8 @@ var UI_THEME = {
 };
 var systemNotice = {
 	visible: false,
-	button: { x: 464, y: 5, width: 42, height: 24 }
+	button: { x: 464, y: 5, width: 42, height: 24 },
+	scroll: 0
 };
 
 canvas.addEventListener("click", function (event) {
@@ -50,6 +51,7 @@ function reportStatus(message, isError) {
 function toggleSystemNotice() {
 	if (messageBook && messageBook.visible) return;
 	systemNotice.visible = !systemNotice.visible;
+	systemNotice.scroll = 0;
 }
 
 // Debug mode keyboard toggle (F12 key)
@@ -815,6 +817,7 @@ var hero = {
 	y: canvas.height / 2,
 	alpha: 1,
 	messages: [], // Array of messages for hero
+	notificationHistory: [],
 	userId: "3146672611", // Specific user ID for hero
 	facingRight: true // Initialize facing direction
 };
@@ -1100,6 +1103,10 @@ function parseMessageContent(message) {
 	return cleanMessage;
 }
 
+function isDateNotice(message) {
+	return /^\d{4}[-/.]\d{1,2}[-/.]\d{1,2}(?:\s|$)/.test(String(message || "").trim());
+}
+
 // Update characters based on chat messages
 function updateCharacters() {
 	// Get unique user IDs from current messages
@@ -1129,6 +1136,9 @@ function updateCharacters() {
 	// Add new hero messages with fade-in effect
 	currentHeroMessages.forEach(function (msg) {
 		var parsedMessage = parseMessageContent(msg.message);
+		if (parsedMessage.trim() !== "" && !isDateNotice(parsedMessage) && !hero.notificationHistory.some(function (item) { return item.content === parsedMessage; })) {
+			hero.notificationHistory.push({ content: parsedMessage, createdAt: Date.now() });
+		}
 		// Check if this message already exists
 		var existingMessage = hero.messages.find(function (m) {
 			return m.content === parsedMessage;
@@ -1729,6 +1739,19 @@ var update = function (modifier) {
 			messageBook.visible = false;
 			messageBook.detailVisible = false;
 			delete keysDown[27];
+		}
+	}
+	if (systemNotice.visible) {
+		if (keysDown[27]) {
+			systemNotice.visible = false;
+			systemNotice.scroll = 0;
+			delete keysDown[27];
+		} else if (keysDown[38]) {
+			systemNotice.scroll = Math.max(0, systemNotice.scroll - 1);
+			delete keysDown[38];
+		} else if (keysDown[40]) {
+			systemNotice.scroll++;
+			delete keysDown[40];
 		}
 	}
 };
@@ -2416,29 +2439,50 @@ function drawSystemNotice() {
 	ctx.textAlign = "right";
 	ctx.fillText("P / ESC 关闭", panelX + panelWidth - 18, panelY + 20);
 
-	var messages = hero.messages.filter(function (message) { return message.alpha > 0 && !message.fadingOut; });
-	var visibleMessages = messages.slice(-5);
+	var messages = hero.notificationHistory;
+	var visibleCount = 5;
+	var maxScroll = Math.max(0, messages.length - visibleCount);
+	systemNotice.scroll = Math.min(systemNotice.scroll, maxScroll);
 	ctx.textAlign = "left";
 	ctx.fillStyle = "#fff3d1";
 	ctx.font = "13px system-ui";
-	if (visibleMessages.length === 0) {
+	if (messages.length === 0) {
 		ctx.fillStyle = "#b9a995";
 		ctx.fillText("暂无新的主角消息", panelX + 18, panelY + 70);
 	} else {
-		if (messages.length > visibleMessages.length) {
-			ctx.fillStyle = "#9f8b76";
-			ctx.fillText("... 更早的通知已省略", panelX + 18, panelY + 64);
-		}
+		var visibleMessages = messages.slice(systemNotice.scroll, systemNotice.scroll + visibleCount);
 		visibleMessages.forEach(function (message, index) {
 			var lines = wrapText(message.content, panelWidth - 36);
-			var y = panelY + 64 + (messages.length > visibleMessages.length ? 20 : 0) + index * 26;
-			ctx.fillStyle = index === visibleMessages.length - 1 ? "#fff3d1" : "#d2c2ae";
-			ctx.fillText(lines[0], panelX + 18, y);
-			if (lines.length > 1) {
-				ctx.fillText("  ...", panelX + 18, y + 13);
-			}
+			var y = panelY + 64 + index * 26;
+			ctx.fillStyle = index === visibleMessages.length - 1 && systemNotice.scroll === maxScroll ? "#fff3d1" : "#d2c2ae";
+			ctx.fillText(truncateText(lines[0] || "", panelWidth - 36), panelX + 18, y);
+			if (lines.length > 1) ctx.fillText("...", panelX + panelWidth - 36, y + 13);
 		});
+		ctx.fillStyle = "#9f8b76";
+		ctx.font = "10px " + UI_THEME.font;
+		ctx.textAlign = "right";
+		ctx.fillText((systemNotice.scroll + 1) + "-" + Math.min(systemNotice.scroll + visibleCount, messages.length) + " / " + messages.length, panelX + panelWidth - 18, panelY + panelHeight - 18);
+		if (maxScroll > 0) {
+			var trackX = panelX + panelWidth - 12;
+			var trackY = panelY + 54;
+			var trackHeight = panelHeight - 86;
+			var thumbHeight = Math.max(22, trackHeight * visibleCount / messages.length);
+			var thumbY = trackY + (trackHeight - thumbHeight) * (systemNotice.scroll / maxScroll);
+			ctx.fillStyle = "rgba(242, 196, 109, 0.22)";
+			ctx.fillRect(trackX, trackY, 4, trackHeight);
+			ctx.fillStyle = UI_THEME.accent;
+			ctx.fillRect(trackX - 1, thumbY, 6, thumbHeight);
+			ctx.fillStyle = UI_THEME.muted;
+			ctx.textAlign = "center";
+			ctx.font = "11px " + UI_THEME.font;
+			if (systemNotice.scroll > 0) ctx.fillText("▲", trackX + 2, trackY - 10);
+			if (systemNotice.scroll < maxScroll) ctx.fillText("▼", trackX + 2, trackY + trackHeight + 13);
+		}
 	}
+	ctx.fillStyle = UI_THEME.muted;
+	ctx.font = "10px " + UI_THEME.font;
+	ctx.textAlign = "left";
+	ctx.fillText(messages.length > visibleCount ? "↑↓ 滚动 · ESC 关闭" : "ESC 关闭", panelX + 18, panelY + panelHeight - 18);
 }
 
 function drawMessageDetail(message) {
