@@ -387,6 +387,13 @@ var sceneBoundaries = {
 	}
 };
 
+var transitionSystem = new PhantomTransitionSystem([
+	{ id: "close-to-far", from: "close", to: "far", label: "前往远景", rect: { left: 0, top: 380, right: canvas.width, bottom: canvas.height }, spawn: { x: canvas.width / 2 - 26, y: 300 } },
+	{ id: "close-to-indoor", from: "close", to: "indoor", label: "进入教堂", rect: { left: 200, top: 0, right: 300, bottom: 100 }, spawn: { x: sceneBoundaries.indoor.width / 2 - 26, y: sceneBoundaries.indoor.height - 100 } },
+	{ id: "far-to-close", from: "far", to: "close", label: "返回广场", rect: { left: 210, top: 250, right: 280, bottom: 280 }, spawn: { x: canvas.width / 2 - 26, y: 350 } },
+	{ id: "indoor-to-close", from: "indoor", to: "close", label: "离开教堂", rect: { left: 170, top: 850, right: 280, bottom: 960 }, spawn: { x: 224, y: 110 } }
+]);
+
 // Camera/viewport management for scrolling scene
 var camera = {
 	x: 0,
@@ -921,6 +928,37 @@ function fetchChatMessages() {
 			console.error('Error fetching chat messages:', error);
 			reportStatus("聊天连接不可用: " + error.message, true);
 		});
+}
+
+function drawSceneTransitions() {
+	var transitions = transitionSystem.forScene(currentScene);
+	transitions.forEach(function (transition) {
+		var rect = transition.rect;
+		var x = rect.left;
+		var y = rect.top;
+		var width = rect.right - rect.left;
+		var height = rect.bottom - rect.top;
+		ctx.save();
+		if (currentScene === "indoor") {
+			x = x * indoorZoom - camera.x;
+			y = y * indoorZoom - camera.y;
+			width *= indoorZoom;
+			height *= indoorZoom;
+		}
+		ctx.fillStyle = "rgba(0, 220, 255, 0.18)";
+		ctx.strokeStyle = "#00e5ff";
+		ctx.lineWidth = 2;
+		ctx.setLineDash([6, 4]);
+		ctx.fillRect(x, y, width, height);
+		ctx.strokeRect(x, y, width, height);
+		ctx.setLineDash([]);
+		ctx.fillStyle = "#bff8ff";
+		ctx.font = "bold 11px monospace";
+		ctx.textAlign = "center";
+		ctx.textBaseline = "middle";
+		ctx.fillText(transition.label + " -> " + transition.to, x + width / 2, y + height / 2);
+		ctx.restore();
+	});
 }
 
 // Normalize the backend's qqUserId shape into the engine's internal shape.
@@ -1516,72 +1554,15 @@ var update = function (modifier) {
 	}
 	// Scene transition logic
 	if (!sceneTransitioning) {
-		if (currentScene === "close") {
-			// Check for transition to far scene
-			if (hero.y > sceneBoundaries.close.bottom) {
-				// Switch to far scene
-				sceneTransitioning = true;
-				currentScene = "far";
-				// Reset hero position to top of far scene (above transition area)
-				hero.y = 300; // Top of screen
-				// Update NPC positions for new scene
-				updateNPCPositionsForScene();
-				// Reset transition flag after a short delay
-				setTimeout(function() {
-					sceneTransitioning = false;
-				}, 500);
-			}
-			// Check for transition to indoor scene (top center)
-			else if (hero.y <= sceneBoundaries.close.top.bottom &&
-				hero.y >= sceneBoundaries.close.top.top &&
-				hero.x >= sceneBoundaries.close.top.left &&
-				hero.x <= sceneBoundaries.close.top.right) {
-				// Switch to indoor scene
-				sceneTransitioning = true;
-				currentScene = "indoor";
-				// Reset hero position to middle of indoor scene
-				hero.x = sceneBoundaries.indoor.width / 2 - 26;
-				hero.y = sceneBoundaries.indoor.height - 100;
-				// Update NPC positions for new scene
-				updateNPCPositionsForScene();
-				// Update camera bounds for indoor scene
-				updateCameraBounds();
-				// Reset transition flag after a short delay
-				setTimeout(function() {
-					sceneTransitioning = false;
-				}, 500);
-			}
-		} else if (currentScene === "far"
-			&& hero.y >= sceneBoundaries.far.top && hero.y <= sceneBoundaries.far.bottom
-			&& hero.x >= sceneBoundaries.far.left && hero.x <= sceneBoundaries.far.right) {
-			// Switch to close scene
+		var transition = transitionSystem.find(currentScene, { x: hero.x, y: hero.y, width: 52, height: 60 });
+		if (transition) {
 			sceneTransitioning = true;
-			currentScene = "close";
-			// Reset hero position to bottom of close scene (above transition area)
-			hero.y = 350; // Just above the bottom boundary
-			// Update NPC positions for new scene
+			currentScene = transition.to;
+			hero.x = transition.spawn.x;
+			hero.y = transition.spawn.y;
 			updateNPCPositionsForScene();
-			// Reset transition flag after a short delay
-			setTimeout(function() {
-				sceneTransitioning = false;
-			}, 500);
-		} else if (currentScene === "indoor" &&
-			hero.y >= sceneBoundaries.indoor.bottom &&
-			hero.x >= sceneBoundaries.indoor.left &&
-			hero.x <= sceneBoundaries.indoor.right) {
-			// Switch back to close scene from indoor
-			sceneTransitioning = true;
-			currentScene = "close";
-			// Reset hero position to edge of indoor transition area (outside indoor entrance)
-			hero.y = sceneBoundaries.close.top.bottom + 10; // Just below indoor transition area
-			hero.x = (sceneBoundaries.close.top.left + sceneBoundaries.close.top.right) / 2 - 26; // Center horizontally
-			// Update NPC positions for new scene
-			updateNPCPositionsForScene();
-			// Reset transition flag after a short delay
-			setTimeout(function() {
-					sceneTransitioning = false;
-			}, 500);
-
+			if (currentScene === "indoor") updateCameraBounds();
+			setTimeout(function() { sceneTransitioning = false; }, 500);
 		}
 	}
 
@@ -1969,6 +1950,7 @@ var render = function () {
 			
 			// Draw hero feet collision line
 			drawHeroFeetCollision();
+			drawSceneTransitions();
 		}
 
 	// Draw far foreground blocks (only in far scene)
