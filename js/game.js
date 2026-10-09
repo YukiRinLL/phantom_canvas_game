@@ -1413,31 +1413,14 @@ function updateCharacters() {
 			if (!existingMessage) {
 				// Check if message is not empty or just spaces
 				if (parsedMessage.trim() !== '') {
-					// Check if the new message would be "..."
-					ctx.font = "12px Helvetica"; // Smaller font
-					var textWidth = ctx.measureText(parsedMessage).width;
-					var maxBubbleWidth = canvas.width - (characters[userId].x + 32) - 10;
-
-					if (textWidth + 16 > maxBubbleWidth) {
-						// Message would be "..."
-						if (!hasEllipsis) {
-							// Add new message with fade-in effect
-							characters[userId].messages.push({
-								content: "...",
-								timeout: Date.now() + 30000, // 30 seconds
-								alpha: 0, // Start with 0 for fade-in
-								fadingIn: true
-							});
-						}
-					} else {
-						// Add new message with fade-in effect
-						characters[userId].messages.push({
-							content: parsedMessage,
-							timeout: Date.now() + 30000, // 30 seconds
-							alpha: 0, // Start with 0 for fade-in
-							fadingIn: true
-						});
-					}
+					// Keep the original message. The renderer wraps it and only
+					// truncates after the maximum number of bubble lines.
+					characters[userId].messages.push({
+						content: parsedMessage,
+						timeout: Date.now() + 30000,
+						alpha: 0,
+						fadingIn: true
+					});
 				}
 			}
 		});
@@ -2128,7 +2111,7 @@ var render = function () {
 							ctx.translate(-camera.x, -camera.y);
 							ctx.scale(indoorZoom, indoorZoom);
 						}
-						drawChatBubble(character.x + 32, character.y - 18 - (bubbleIndex * 20), msg.content);
+						drawChatBubble(character.x + 32, character.y - 18 - (bubbleIndex * 50), msg.content);
 						ctx.restore();
 						ctx.globalAlpha = 1;
 					}
@@ -2422,18 +2405,19 @@ function drawChatBubble(x, y, text) {
 	// Calculate text width
 	ctx.font = "12px Helvetica";
 	var padding = 4; // padding
-	var maxBubbleWidth = canvas.width - 20;
-	var bubbleHeight = 20; // bubble height
+	var maxBubbleWidth = Math.min(180, canvas.width - 20);
+	var lineHeight = 14;
+	var maxLines = 3;
 	var bubbleX = x;
 	var bubbleY = Math.max(0, y);
 	var displayText = text;
-	var textWidth = ctx.measureText(displayText).width;
-
-	if (textWidth + padding * 2 > maxBubbleWidth) {
-		displayText = truncateText(displayText, maxBubbleWidth - padding * 2);
-		textWidth = ctx.measureText(displayText).width;
-	}
-	var bubbleWidth = textWidth + padding * 2;
+	var lines = wrapText(displayText, maxBubbleWidth - padding * 2);
+	var truncated = lines.length > maxLines;
+	if (truncated) lines = lines.slice(0, maxLines);
+	if (truncated) lines[maxLines - 1] = truncateText(lines[maxLines - 1], maxBubbleWidth - padding * 2);
+	var textWidth = lines.reduce(function (width, line) { return Math.max(width, ctx.measureText(line).width); }, 0);
+	var bubbleWidth = Math.min(maxBubbleWidth, textWidth + padding * 2);
+	var bubbleHeight = lines.length * lineHeight + padding * 2;
 	// Keep a normal-length bubble readable by moving it to the actor's left
 	// when the actor is too close to the right edge.
 	if (bubbleX + bubbleWidth > canvas.width - 10) {
@@ -2457,8 +2441,10 @@ function drawChatBubble(x, y, text) {
 	// Draw text
 	ctx.fillStyle = "rgb(0, 0, 0)";
 	ctx.textAlign = "left";
-	ctx.textBaseline = "middle";
-	ctx.fillText(displayText, bubbleX + padding, bubbleY + bubbleHeight / 2);
+	ctx.textBaseline = "top";
+	lines.forEach(function (line, index) {
+		ctx.fillText(line, bubbleX + padding, bubbleY + padding + index * lineHeight);
+	});
 }
 
 function drawRoundedPanel(x, y, width, height, fill, stroke) {
