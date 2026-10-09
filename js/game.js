@@ -2330,7 +2330,7 @@ var render = function () {
 		ctx.fillText("留言簿", canvas.width / 2, bookY + 36);
 		ctx.fillStyle = "#9c6f38";
 		ctx.font = "9px " + UI_THEME.font;
-		ctx.fillText("PHANTOM ARCHIVE", canvas.width / 2, bookY + 51);
+	ctx.fillText("ARCHIVE", canvas.width / 2, bookY + 51);
 		
 		// Draw decorative line
 		ctx.strokeStyle = UI_THEME.border;
