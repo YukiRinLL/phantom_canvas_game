@@ -8,6 +8,22 @@ PhantomInputSystem.init(window);
 canvas.width = gameConfig.canvas.width;
 canvas.height = gameConfig.canvas.height;
 var runtimeStatus = document.getElementById("runtime-status");
+var systemNotice = {
+	visible: false,
+	button: { x: 464, y: 5, width: 42, height: 24 }
+};
+
+canvas.addEventListener("click", function (event) {
+	var bounds = canvas.getBoundingClientRect();
+	var scaleX = canvas.width / bounds.width;
+	var scaleY = canvas.height / bounds.height;
+	var x = (event.clientX - bounds.left) * scaleX;
+	var y = (event.clientY - bounds.top) * scaleY;
+	var button = systemNotice.button;
+	if (x >= button.x && x <= button.x + button.width && y >= button.y && y <= button.y + button.height) {
+		toggleSystemNotice();
+	}
+});
 
 function reportStatus(message, isError) {
 	if (runtimeStatus) {
@@ -15,6 +31,11 @@ function reportStatus(message, isError) {
 		runtimeStatus.style.color = isError ? "#ff8a8a" : "#ffd166";
 	}
 	if (isError) console.warn("[Phantom] " + message);
+}
+
+function toggleSystemNotice() {
+	if (messageBook && messageBook.visible) return;
+	systemNotice.visible = !systemNotice.visible;
 }
 
 // Debug mode keyboard toggle (F12 key)
@@ -1565,6 +1586,9 @@ var update = function (modifier) {
 			setTimeout(function() { sceneTransitioning = false; }, 500);
 		}
 	}
+	if (PhantomInputSystem.consume(80)) {
+		toggleSystemNotice();
+	}
 
 	// Update interactive elements
 	if (currentScene === "indoor") {
@@ -1654,6 +1678,11 @@ var update = function (modifier) {
 			}
 			delete keysDown[39];
 		} else if (keysDown[27]) { // Escape key
+			if (systemNotice.visible) {
+				systemNotice.visible = false;
+				delete keysDown[27];
+				return;
+			}
 			messageBook.visible = false;
 			messageBook.detailVisible = false;
 			delete keysDown[27];
@@ -1992,30 +2021,8 @@ var render = function () {
 		}
 	}
 
-	// Draw hero's chat bubbles
-	if (hero.messages) {
-		hero.messages.forEach(function (msg, index) {
-			if (msg.alpha > 0) {
-				ctx.globalAlpha = msg.alpha;
-				// Position bubbles above hero (newest at bottom)
-					var bubbleIndex = hero.messages.length - 1 - index;
-					ctx.save();
-					if (currentScene === "indoor") {
-						// Convert the world anchor to screen coordinates, but keep the
-						// bubble itself in screen space so its size matches outdoor scenes.
-						drawChatBubble(
-							(hero.x + 32) * indoorZoom - camera.x,
-							(hero.y - 18 - (bubbleIndex * 24)) * indoorZoom - camera.y,
-							msg.content
-						);
-					} else {
-						drawChatBubble(hero.x + 32, hero.y - 18 - (bubbleIndex * 24), msg.content);
-					}
-					ctx.restore();
-				ctx.globalAlpha = 1;
-			}
-		});
-	}
+	// Hero messages are shown in the system notice panel instead of above the hero.
+	drawSystemNotice();
 
 	// Draw interactive elements (only in indoor scene)
 	if (currentScene === "indoor") {
@@ -2268,6 +2275,76 @@ function drawMessageBookEmptyState(x, y, text) {
 	ctx.textAlign = "center";
 	ctx.textBaseline = "middle";
 	ctx.fillText(text, x + 136, y + 150);
+}
+
+function drawSystemNotice() {
+	var button = systemNotice.button;
+	ctx.save();
+	ctx.fillStyle = systemNotice.visible ? "#f2c46d" : "rgba(32, 27, 24, 0.85)";
+	ctx.strokeStyle = "#f2c46d";
+	ctx.lineWidth = 1;
+	ctx.beginPath();
+	ctx.roundRect(button.x, button.y, button.width, button.height, 6);
+	ctx.fill();
+	ctx.stroke();
+	var iconColor = systemNotice.visible ? "#4a2911" : "#fff3d1";
+	ctx.fillStyle = iconColor;
+	ctx.strokeStyle = iconColor;
+	ctx.lineWidth = 1.5;
+	ctx.beginPath();
+	ctx.arc(button.x + 11, button.y + 10, 5, Math.PI, 0);
+	ctx.lineTo(button.x + 17, button.y + 16);
+	ctx.lineTo(button.x + 5, button.y + 16);
+	ctx.closePath();
+	ctx.fill();
+	ctx.beginPath();
+	ctx.arc(button.x + 11, button.y + 17, 2, 0, Math.PI);
+	ctx.stroke();
+	ctx.font = "bold 12px system-ui";
+	ctx.textAlign = "center";
+	ctx.textBaseline = "middle";
+	ctx.fillText("P", button.x + 31, button.y + button.height / 2);
+	ctx.restore();
+
+	if (!systemNotice.visible) return;
+	var panelX = 42;
+	var panelY = 42;
+	var panelWidth = canvas.width - 84;
+	var panelHeight = 210;
+	drawRoundedPanel(panelX, panelY, panelWidth, panelHeight, "rgba(30, 24, 20, 0.96)", "#f2c46d");
+	ctx.fillStyle = "#f2c46d";
+	ctx.font = "bold 16px system-ui";
+	ctx.textAlign = "left";
+	ctx.textBaseline = "top";
+	ctx.fillText("通知提示", panelX + 18, panelY + 16);
+	ctx.fillStyle = "#b9a995";
+	ctx.font = "11px system-ui";
+	ctx.textAlign = "right";
+	ctx.fillText("P / ESC 关闭", panelX + panelWidth - 18, panelY + 20);
+
+	var messages = hero.messages.filter(function (message) { return message.alpha > 0 && !message.fadingOut; });
+	var visibleMessages = messages.slice(-5);
+	ctx.textAlign = "left";
+	ctx.fillStyle = "#fff3d1";
+	ctx.font = "13px system-ui";
+	if (visibleMessages.length === 0) {
+		ctx.fillStyle = "#b9a995";
+		ctx.fillText("暂无新的主角消息", panelX + 18, panelY + 70);
+	} else {
+		if (messages.length > visibleMessages.length) {
+			ctx.fillStyle = "#9f8b76";
+			ctx.fillText("... 更早的通知已省略", panelX + 18, panelY + 64);
+		}
+		visibleMessages.forEach(function (message, index) {
+			var lines = wrapText(message.content, panelWidth - 36);
+			var y = panelY + 64 + (messages.length > visibleMessages.length ? 20 : 0) + index * 26;
+			ctx.fillStyle = index === visibleMessages.length - 1 ? "#fff3d1" : "#d2c2ae";
+			ctx.fillText(lines[0], panelX + 18, y);
+			if (lines.length > 1) {
+				ctx.fillText("  ...", panelX + 18, y + 13);
+			}
+		});
+	}
 }
 
 function drawMessageDetail(message) {
