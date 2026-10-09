@@ -1383,7 +1383,8 @@ function updateCharacters() {
 							alpha: 0, // Start with 0 for fade-in
 							fadingIn: true,
 							fadingOut: false,
-							facingRight: true // Initialize facing direction
+							facingRight: true,
+							bubbleSideProgress: npcX + charWidth / 2 < canvas.width / 2 ? 0 : 1
 						};
 		}
 		// Update character messages
@@ -1489,6 +1490,9 @@ var update = function (modifier) {
 	// Update characters
 	for (var userId in characters) {
 		var character = characters[userId];
+		var desiredBubbleSide = character.x + 26 < canvas.width / 2 ? 0 : 1;
+		if (character.bubbleSideProgress == null) character.bubbleSideProgress = desiredBubbleSide;
+		character.bubbleSideProgress += (desiredBubbleSide - character.bubbleSideProgress) * Math.min(1, modifier / 0.16);
 		// Handle animation and transitions
 		if (character.fadingIn) {
 			character.alpha = Math.min(1, character.alpha + modifier * 2);
@@ -2100,18 +2104,27 @@ var render = function () {
 		for (var userId in characters) {
 			var character = characters[userId];
 			if (character.messages) {
-				character.messages.forEach(function (msg, index) {
+				var visibleBubbles = character.messages.filter(function (message) {
+					return message.alpha > 0 && !message.fadingOut;
+				});
+				var bubbleLayout = [];
+				var layoutY = character.y - 18;
+				for (var layoutIndex = visibleBubbles.length - 1; layoutIndex >= 0; layoutIndex--) {
+					bubbleLayout[layoutIndex] = layoutY;
+					// A one-pixel overlap removes font-metric seams between bubbles.
+					layoutY -= Math.max(0, getChatBubbleHeight(visibleBubbles[layoutIndex].content) - 1);
+				}
+				visibleBubbles.forEach(function (msg, index) {
 					if (msg.alpha > 0) {
 						ctx.globalAlpha = msg.alpha;
-						// Position bubbles above each other (newest at bottom)
-						var bubbleIndex = character.messages.length - 1 - index;
+						var bubbleSide = character.bubbleSideProgress;
 						ctx.save();
 						if (currentScene === "indoor") {
 							// Apply camera and zoom for indoor scene
 							ctx.translate(-camera.x, -camera.y);
 							ctx.scale(indoorZoom, indoorZoom);
 						}
-						drawChatBubble(character.x + 32, character.y - 18 - (bubbleIndex * 50), msg.content);
+						drawChatBubble(character.x + 32, bubbleLayout[index], msg.content, bubbleSide);
 						ctx.restore();
 						ctx.globalAlpha = 1;
 					}
@@ -2398,7 +2411,18 @@ function drawPixelTransition() {
 }
 
 // Draw chat bubble
-function drawChatBubble(x, y, text) {
+function getChatBubbleHeight(text) {
+	ctx.font = "12px Helvetica";
+	var maxWidth = Math.min(180, canvas.width - 20) - 8;
+	var lines = wrapText(String(text || ""), maxWidth);
+	if (lines.length > 1) {
+		ctx.font = "10px Helvetica";
+		lines = wrapText(String(text || ""), maxWidth);
+	}
+	return Math.min(lines.length, 3) * (ctx.font.indexOf("10px") === 0 ? 12 : 14) + 8;
+}
+
+function drawChatBubble(x, y, text, side) {
 	ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
 	ctx.strokeStyle = "rgba(0, 0, 0, 0.4)";
 	ctx.lineWidth = 2;
@@ -2408,16 +2432,22 @@ function drawChatBubble(x, y, text) {
 	var maxBubbleWidth = Math.min(180, canvas.width - 20);
 	var lineHeight = 14;
 	var maxLines = 3;
-	var bubbleX = x;
 	var bubbleY = Math.max(0, y);
 	var displayText = text;
 	var lines = wrapText(displayText, maxBubbleWidth - padding * 2);
+	if (lines.length > 1) {
+		ctx.font = "10px Helvetica";
+		lineHeight = 12;
+		lines = wrapText(displayText, maxBubbleWidth - padding * 2);
+	}
 	var truncated = lines.length > maxLines;
 	if (truncated) lines = lines.slice(0, maxLines);
 	if (truncated) lines[maxLines - 1] = truncateText(lines[maxLines - 1], maxBubbleWidth - padding * 2);
 	var textWidth = lines.reduce(function (width, line) { return Math.max(width, ctx.measureText(line).width); }, 0);
 	var bubbleWidth = Math.min(maxBubbleWidth, textWidth + padding * 2);
 	var bubbleHeight = lines.length * lineHeight + padding * 2;
+	var bubbleSide = typeof side === "number" ? side : (side === "left" ? 1 : 0);
+	var bubbleX = x - bubbleWidth * bubbleSide;
 	// Keep a normal-length bubble readable by moving it to the actor's left
 	// when the actor is too close to the right edge.
 	if (bubbleX + bubbleWidth > canvas.width - 10) {
