@@ -16,6 +16,15 @@
       pollIntervalMs: 5000,
       requestTimeoutMs: 8000,
       heroUserId: "3146672611",
+      hero: {
+        asset: "images/generated/hero-trimmed.png",
+        width: 52,
+        height: 60,
+        renderScale: 0.82,
+        // Keep the legacy scene collision frame. Background walls and exits
+        // were authored against this 52x60 coordinate space.
+        collision: { x: 0, y: 0, width: 52, height: 60 }
+      },
       maxBubbleCount: 3,
       bubbleLifetimeMs: 30000
     }

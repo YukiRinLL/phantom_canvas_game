@@ -132,7 +132,7 @@ var resources = {
 		heroImage: {
 			ready: false,
 			image: null,
-			paths: ["images/hero.png"],
+			paths: [gameConfig.hero.asset],
 			currentPathIndex: 0,
 			name: "hero"
 		}
@@ -357,7 +357,7 @@ function startGame() {
 	fetchMessages();
 	
 	// Start the main game loop
-	var then = Date.now();
+	var then = (window.performance && window.performance.now) ? window.performance.now() : Date.now();
 	main(then);
 }
 
@@ -809,10 +809,16 @@ var availableImagePaths = [];
 // Hero image
 var heroReady = false;
 var heroImage = null;
+var heroGeometry = gameConfig.hero || { width: 52, height: 60, renderScale: 0.82, collision: { x: 0, y: 0, width: 52, height: 60 } };
+
+function getHeroCollisionGeometry() {
+	return heroGeometry.sceneCollision && heroGeometry.sceneCollision[currentScene] || heroGeometry.collision;
+}
 
 // Hero object
 var hero = {
 	speed: 256, // movement in pixels per second
+	moveAccumulator: 0,
 	x: canvas.width / 2,
 	y: canvas.height / 2,
 	alpha: 1,
@@ -870,18 +876,58 @@ function drawCollisionWalls() {
 // Draw hero feet collision line for debugging
 function drawHeroFeetCollision() {
 	ctx.save();
+	var collision = getHeroCollisionBox();
 	if (currentScene === "indoor") {
-		ctx.translate(-camera.x, -camera.y);
-		ctx.scale(indoorZoom, indoorZoom);
-	}
-	var feetY = hero.y + 60 - 2; // Hero height is 60
-	ctx.strokeStyle = "rgba(0, 255, 0, 0.7)";
+		collision.x = collision.x * indoorZoom - camera.x;
+		collision.y = collision.y * indoorZoom - camera.y;
+		collision.width *= indoorZoom;
+		collision.height *= indoorZoom;
+	} 
+	var feetX = collision.x;
+	var feetY = collision.y + collision.height - (currentScene === "indoor" ? 2 * indoorZoom : 2);
+	var feetWidth = collision.width;
+	// Orange is the configured collision box; green is the exact line used by
+	// checkWallCollision, making the debug view match runtime behavior.
+	ctx.strokeStyle = "rgba(255, 150, 0, 0.8)";
 	ctx.lineWidth = 2;
+	ctx.strokeRect(collision.x, collision.y, collision.width, collision.height);
+	ctx.strokeStyle = "rgba(0, 255, 0, 0.95)";
 	ctx.beginPath();
-	ctx.moveTo(hero.x, feetY);
-	ctx.lineTo(hero.x + 52, feetY); // Hero width is 52
+	ctx.moveTo(feetX, feetY);
+	ctx.lineTo(feetX + feetWidth, feetY);
 	ctx.stroke();
 	ctx.restore();
+}
+
+function drawHeroSpriteDebug() {
+	if (!heroImage) return;
+	ctx.save();
+	if (currentScene === "indoor") {
+		ctx.strokeStyle = "rgba(255, 210, 0, 0.9)";
+		ctx.strokeRect(hero.x * indoorZoom - camera.x, hero.y * indoorZoom - camera.y, heroGeometry.width, heroGeometry.height);
+		ctx.strokeStyle = "rgba(255, 120, 0, 0.9)";
+		ctx.strokeRect(hero.x * indoorZoom - camera.x + 1, hero.y * indoorZoom - camera.y + 1, heroGeometry.width - 2, heroGeometry.height - 2);
+		ctx.restore();
+		ctx.fillStyle = UI_THEME.text;
+		ctx.font = "10px " + UI_THEME.font;
+		ctx.textAlign = "left";
+		ctx.fillText("Sprite: static trimmed PNG " + heroImage.width + "x" + heroImage.height, 10, 100);
+		var debugCollision = getHeroCollisionGeometry();
+		ctx.fillText("Collision: x=" + debugCollision.x + " y=" + debugCollision.y + " w=" + debugCollision.width + " h=" + debugCollision.height, 10, 115);
+		return;
+	}
+	ctx.strokeStyle = "rgba(255, 210, 0, 0.9)";
+	ctx.lineWidth = 1;
+	ctx.strokeRect(hero.x, hero.y, heroGeometry.width, heroGeometry.height);
+	ctx.strokeStyle = "rgba(255, 120, 0, 0.9)";
+	ctx.strokeRect(hero.x + 1, hero.y + 1, heroGeometry.width - 2, heroGeometry.height - 2);
+	ctx.restore();
+	ctx.fillStyle = UI_THEME.text;
+	ctx.font = "10px " + UI_THEME.font;
+	ctx.textAlign = "left";
+	ctx.fillText("Sprite: static trimmed PNG " + heroImage.width + "x" + heroImage.height, 10, 100);
+	var debugCollision = getHeroCollisionGeometry();
+	ctx.fillText("Collision: x=" + debugCollision.x + " y=" + debugCollision.y + " w=" + debugCollision.width + " h=" + debugCollision.height, 10, 115);
 }
 
 // Load character images
@@ -966,6 +1012,52 @@ function fetchChatMessages() {
 			console.error('Error fetching chat messages:', error);
 			reportStatus("聊天连接不可用: " + error.message, true);
 		});
+}
+
+function getHeroCollisionBox() {
+	var collision = getHeroCollisionGeometry();
+	return {
+		x: hero.x + collision.x,
+		y: hero.y + collision.y,
+		width: collision.width,
+		height: collision.height
+	};
+}
+
+function moveHeroAxis(deltaX, deltaY, wallSize, width, height) {
+	var nextX = hero.x + deltaX;
+	var nextY = hero.y + deltaY;
+	var maxX = (currentScene === "indoor" ? sceneBoundaries.indoor.width : canvas.width) - wallSize - heroGeometry.width;
+	var maxY = (currentScene === "indoor" ? sceneBoundaries.indoor.height : canvas.height) - wallSize - heroGeometry.height;
+	var collision;
+	var collisionGeometry = getHeroCollisionGeometry();
+	// Keep the visual role inside the scene, while collision uses its foot box.
+	hero.x = Math.max(wallSize - collisionGeometry.x, Math.min(maxX, nextX));
+	hero.y = Math.max(wallSize - collisionGeometry.y, Math.min(maxY, nextY));
+	collision = getHeroCollisionBox();
+	if (checkWallCollision(collision.x, collision.y, width, height)) {
+		hero.x -= deltaX;
+		hero.y -= deltaY;
+	}
+}
+
+function drawHeroSprite(x, y, facingRight) {
+	var sprite = heroImage;
+	var fitScale = Math.min(heroGeometry.width / sprite.width, heroGeometry.height / sprite.height);
+	var scale = fitScale * (heroGeometry.renderScale || 1);
+	var drawWidth = sprite.width * scale;
+	var drawHeight = sprite.height * scale;
+	var drawX = (heroGeometry.width - drawWidth) / 2;
+	var drawY = heroGeometry.height - drawHeight;
+	ctx.save();
+	if (facingRight) {
+		ctx.translate(x + heroGeometry.width - drawX, y + drawY);
+		ctx.scale(-1, 1);
+		ctx.drawImage(sprite, 0, 0, drawWidth, drawHeight);
+	} else {
+		ctx.drawImage(sprite, x + drawX, y + drawY, drawWidth, drawHeight);
+	}
+	ctx.restore();
 }
 
 function truncateText(text, maxWidth) {
@@ -1355,54 +1447,34 @@ function updateCharacters() {
 var update = function (modifier) {
 	// Update hero position based on keyboard input
 	// Consider 32px wall border and 52x60 character size
-	var heroWidth = 52;
-	var heroHeight = 60;
+	var heroCollisionGeometry = getHeroCollisionGeometry();
+	var heroWidth = heroCollisionGeometry.width;
+	var heroHeight = heroCollisionGeometry.height;
 	var wallSize = 32;
 
 	// Don't move if message book is open
 	if (!messageBook.visible) {
-		// Store original position for collision detection
-		var originalX = hero.x;
-		var originalY = hero.y;
-		if (38 in keysDown || 87 in keysDown) { // Player holding up (arrow up or W)
-			if (currentScene === "indoor") {
-				hero.y = Math.max(wallSize, hero.y - hero.speed * modifier);
-			} else {
-				hero.y = Math.max(wallSize, hero.y - hero.speed * modifier);
-			}
+		var moveX = (keysDown[39] || keysDown[68] ? 1 : 0) - (keysDown[37] || keysDown[65] ? 1 : 0);
+		var moveY = (keysDown[40] || keysDown[83] ? 1 : 0) - (keysDown[38] || keysDown[87] ? 1 : 0);
+		if (moveX === 0 && moveY === 0) {
+			if (currentScene === "indoor") updateCamera();
+		} else {
+		var moveLength = Math.sqrt(moveX * moveX + moveY * moveY) || 1;
+		var distance = hero.speed * modifier;
+		var stepCount = Math.max(1, Math.ceil(distance / 2));
+		var stepX = moveX / moveLength * distance / stepCount;
+		var stepY = moveY / moveLength * distance / stepCount;
+
+		if (moveX < 0) hero.facingRight = false;
+		if (moveX > 0) hero.facingRight = true;
+		for (var step = 0; step < stepCount; step++) {
+			moveHeroAxis(stepX, 0, wallSize, heroWidth, heroHeight);
+			moveHeroAxis(0, stepY, wallSize, heroWidth, heroHeight);
 		}
-		if (40 in keysDown || 83 in keysDown) { // Player holding down (arrow down or S)
-			if (currentScene === "indoor") {
-				hero.y = Math.min(sceneBoundaries.indoor.height - wallSize, hero.y + hero.speed * modifier);
-			} else {
-				hero.y = Math.min(canvas.height - wallSize, hero.y + hero.speed * modifier);
-			}
-		}
-		if (37 in keysDown || 65 in keysDown) { // Player holding left (arrow left or A)
-			if (currentScene === "indoor") {
-				hero.x = Math.max(wallSize, hero.x - hero.speed * modifier);
-			} else {
-				hero.x = Math.max(wallSize, hero.x - hero.speed * modifier);
-			}
-			hero.facingRight = false; // Face left
-		}
-		if (39 in keysDown || 68 in keysDown) { // Player holding right (arrow right or D)
-			if (currentScene === "indoor") {
-				hero.x = Math.min(sceneBoundaries.indoor.width - wallSize, hero.x + hero.speed * modifier);
-			} else {
-				hero.x = Math.min(canvas.width - wallSize, hero.x + hero.speed * modifier);
-			}
-			hero.facingRight = true; // Face right
 		}
 		// Update camera for indoor scene
 		if (currentScene === "indoor") {
 			updateCamera();
-		}
-		// Check wall collision and revert if collision
-		if (checkWallCollision(hero.x, hero.y, heroWidth, heroHeight)) {
-			// Revert to original position
-			hero.x = originalX;
-			hero.y = originalY;
 		}
 	}
 	// Update characters
@@ -1628,7 +1700,12 @@ var update = function (modifier) {
 	}
 	// Scene transition logic
 	if (!sceneTransitioning) {
-		var transition = transitionSystem.find(currentScene, { x: hero.x, y: hero.y, width: 52, height: 60 });
+		var transition = transitionSystem.find(currentScene, {
+			x: hero.x + getHeroCollisionGeometry().x,
+			y: hero.y + getHeroCollisionGeometry().y,
+			width: getHeroCollisionGeometry().width,
+			height: getHeroCollisionGeometry().height
+		});
 		if (transition) {
 			sceneTransitioning = true;
 			currentScene = transition.to;
@@ -1965,17 +2042,7 @@ var render = function () {
 				ctx.globalAlpha = hero.alpha;
 
 				ctx.save();
-				if (hero.facingRight === true) {
-					ctx.translate(hero.x + 26, hero.y);
-					ctx.scale(-1, 1);
-					var scale = 52 / 70;
-					var cropY = (70 - 60/scale) / 2;
-					ctx.drawImage(heroImage, 0, cropY, 70, 70 - cropY*2, -26, 0, 52, 60);
-				} else {
-					var scale = 52 / 70;
-					var cropY = (70 - 60/scale) / 2;
-					ctx.drawImage(heroImage, 0, cropY, 70, 70 - cropY*2, hero.x, hero.y, 52, 60);
-				}
+				drawHeroSprite(hero.x, hero.y, hero.facingRight === true);
 				ctx.restore();
 				ctx.globalAlpha = 1;
 			}
@@ -1989,17 +2056,8 @@ var render = function () {
 			var screenX = (hero.x * indoorZoom) - camera.x;
 			var screenY = (hero.y * indoorZoom) - camera.y;
 
-			if (hero.facingRight === true) {
-				ctx.translate(screenX + 26, screenY);
-				ctx.scale(-1, 1);
-				var scale = 52 / 70;
-				var cropY = (70 - 60/scale) / 2;
-				ctx.drawImage(heroImage, 0, cropY, 70, 70 - cropY*2, -26, 0, 52, 60);
-			} else {
-				var scale = 52 / 70;
-				var cropY = (70 - 60/scale) / 2;
-				ctx.drawImage(heroImage, 0, cropY, 70, 70 - cropY*2, screenX, screenY, 52, 60);
-			}
+			ctx.translate(screenX, screenY);
+			drawHeroSprite(0, 0, hero.facingRight === true);
 			ctx.restore();
 			ctx.globalAlpha = 1;
 		}
@@ -2009,17 +2067,7 @@ var render = function () {
 			ctx.globalAlpha = hero.alpha;
 
 			ctx.save();
-			if (hero.facingRight === true) {
-				ctx.translate(hero.x + 26, hero.y);
-				ctx.scale(-1, 1);
-				var scale = 52 / 70;
-				var cropY = (70 - 60/scale) / 2;
-				ctx.drawImage(heroImage, 0, cropY, 70, 70 - cropY*2, -26, 0, 52, 60);
-			} else {
-				var scale = 52 / 70;
-				var cropY = (70 - 60/scale) / 2;
-				ctx.drawImage(heroImage, 0, cropY, 70, 70 - cropY*2, hero.x, hero.y, 52, 60);
-			}
+			drawHeroSprite(hero.x, hero.y, hero.facingRight === true);
 			ctx.restore();
 			ctx.globalAlpha = 1;
 		}
@@ -2045,6 +2093,7 @@ var render = function () {
 			
 			// Draw hero feet collision line
 			drawHeroFeetCollision();
+			drawHeroSpriteDebug();
 			drawSceneTransitions();
 		}
 
@@ -2534,6 +2583,9 @@ function drawMessageDetail(message) {
 
 // The main game loop
 var main = function (then) {
+	var fixedStep = 1 / 60;
+	var frameSeconds;
+	var updates = 0;
 	// Draw loading screen if still loading
 	if (resources.loading) {
 		drawLoadingScreen();
@@ -2574,9 +2626,15 @@ var main = function (then) {
 		heroReady = true;
 	}
 	
-	var now = Date.now();
-	var delta = Math.min(now - then, 100);
-	update(delta / 1000);
+	var now = (window.performance && window.performance.now) ? window.performance.now() : Date.now();
+	var delta = Math.min(now - then, 50);
+	frameSeconds = delta / 1000;
+	main.accumulator = (main.accumulator || 0) + frameSeconds;
+	while (main.accumulator >= fixedStep && updates < 4) {
+		update(fixedStep);
+		main.accumulator -= fixedStep;
+		updates++;
+	}
 	render();
 	
 	// Request to do this again ASAP
