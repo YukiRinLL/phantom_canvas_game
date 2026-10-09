@@ -8,6 +8,16 @@ PhantomInputSystem.init(window);
 canvas.width = gameConfig.canvas.width;
 canvas.height = gameConfig.canvas.height;
 var runtimeStatus = document.getElementById("runtime-status");
+var UI_THEME = {
+	panel: "rgba(30, 24, 20, 0.96)",
+	panelSoft: "rgba(42, 33, 27, 0.94)",
+	border: "#f2c46d",
+	accent: "#f2c46d",
+	text: "#fff3d1",
+	muted: "#b9a995",
+	danger: "#ff9a8f",
+	font: "system-ui, -apple-system, Segoe UI, sans-serif"
+};
 var systemNotice = {
 	visible: false,
 	button: { x: 464, y: 5, width: 42, height: 24 }
@@ -22,6 +32,10 @@ canvas.addEventListener("click", function (event) {
 	var button = systemNotice.button;
 	if (x >= button.x && x <= button.x + button.width && y >= button.y && y <= button.y + button.height) {
 		toggleSystemNotice();
+		return;
+	}
+	if (messageBook && messageBook.visible && !messageBook.detailVisible) {
+		openMessageDetailAtPoint(x, y);
 	}
 });
 
@@ -951,6 +965,35 @@ function fetchChatMessages() {
 		});
 }
 
+function truncateText(text, maxWidth) {
+	var value = String(text || "");
+	var suffix = "...";
+	if (ctx.measureText(value).width <= maxWidth) return value;
+	while (value.length > 0 && ctx.measureText(value + suffix).width > maxWidth) {
+		value = value.slice(0, -1);
+	}
+	return value + suffix;
+}
+
+function openMessageDetailAtPoint(x, y) {
+	var bookX = 100;
+	var bookY = 80;
+	var paperX = bookX + 24;
+	var paperWidth = 312 - 40;
+	var cardX = paperX + 10;
+	var cardWidth = paperWidth - 20;
+	var currentPageMessages = getCurrentPageMessages();
+	for (var index = 0; index < currentPageMessages.length; index++) {
+		var cardY = bookY + 76 + (index * 66);
+		if (x >= cardX && x <= cardX + cardWidth && y >= cardY && y <= cardY + 60) {
+			messageBook.selectedIndex = index;
+			messageBook.detailVisible = true;
+			messageBook.detailScroll = 0;
+			return;
+		}
+	}
+}
+
 function drawSceneTransitions() {
 	var transitions = transitionSystem.forScene(currentScene);
 	transitions.forEach(function (transition) {
@@ -1760,8 +1803,8 @@ var render = function () {
 			ctx.fillRect(0, 0, canvas.width, canvas.height);
 
 			// Draw loading text
-			ctx.fillStyle = "white";
-			ctx.font = "16px Arial";
+			ctx.fillStyle = UI_THEME.text;
+			ctx.font = "14px " + UI_THEME.font;
 			ctx.textAlign = "center";
 			ctx.textBaseline = "middle";
 			ctx.fillText("Loading...", canvas.width / 2, canvas.height / 2);
@@ -1816,8 +1859,8 @@ var render = function () {
 
 	// Draw debug info for image loading
 	if (debugMode) {
-		ctx.fillStyle = "white";
-		ctx.font = "10px Arial";
+			ctx.fillStyle = UI_THEME.text;
+			ctx.font = "10px " + UI_THEME.font;
 		ctx.textAlign = "left";
 		ctx.textBaseline = "top";
 		ctx.fillText("Image Status:", 10, 70);
@@ -1961,8 +2004,8 @@ var render = function () {
 
 	// Draw debug info for hero
 	if (debugMode) {
-			ctx.fillStyle = "white";
-			ctx.font = "12px Arial";
+			ctx.fillStyle = UI_THEME.text;
+			ctx.font = "12px " + UI_THEME.font;
 			ctx.textAlign = "left";
 			ctx.textBaseline = "top";
 			ctx.fillText("Hero: x=" + Math.round(hero.x) + ", y=" + Math.round(hero.y), 10, 10);
@@ -2043,10 +2086,10 @@ var render = function () {
 		// Draw interact hint
 		if (lectern.showHint) {
 			ctx.save();
-			ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+			ctx.fillStyle = UI_THEME.panel;
 			ctx.fillRect(20, canvas.height - 60, 200, 40);
-			ctx.fillStyle = "white";
-			ctx.font = "14px Arial";
+			ctx.fillStyle = UI_THEME.text;
+			ctx.font = "14px " + UI_THEME.font;
 			ctx.textAlign = "center";
 			ctx.textBaseline = "middle";
 			ctx.fillText("按 F 键互动", 120, canvas.height - 40);
@@ -2065,21 +2108,26 @@ var render = function () {
 		var bookY = 80;
 		var bookWidth = 312;
 		var bookHeight = 320;
-		var cornerSize = 16; // Pixel corner size
+		var cornerSize = 14;
 		
 		// Draw pixel-style shadow
 		ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
-		ctx.fillRect(bookX + 8, bookY + 8, bookWidth, bookHeight);
+		ctx.fillRect(bookX + 6, bookY + 7, bookWidth, bookHeight);
 		
-		// Draw book cover (dark brown)
-		ctx.fillStyle = "#5D3A1A";
+		// Layered cover: leather, inset border and a restrained gold frame.
+		ctx.fillStyle = "#5d3a1a";
 		
 		// Draw main body
 		ctx.fillRect(bookX + cornerSize, bookY, bookWidth - cornerSize * 2, bookHeight);
 		ctx.fillRect(bookX, bookY + cornerSize, bookWidth, bookHeight - cornerSize * 2);
+		ctx.strokeStyle = "#c18a42";
+		ctx.lineWidth = 1;
+		ctx.strokeRect(bookX + 18, bookY + 10, bookWidth - 28, bookHeight - 20);
+		ctx.strokeStyle = "rgba(40, 20, 8, 0.65)";
+		ctx.strokeRect(bookX + 21, bookY + 13, bookWidth - 34, bookHeight - 26);
 		
 		// Draw pixel-style corners
-		ctx.fillStyle = "#8B4513";
+		ctx.fillStyle = "#8b541f";
 		// Top-left corner
 		ctx.fillRect(bookX, bookY, cornerSize, cornerSize);
 		// Top-right corner
@@ -2090,23 +2138,29 @@ var render = function () {
 		ctx.fillRect(bookX + bookWidth - cornerSize, bookY + bookHeight - cornerSize, cornerSize, cornerSize);
 		
 		// Draw book spine (darker brown)
-		ctx.fillStyle = "#4A2911";
-		ctx.fillRect(bookX, bookY, 8, bookHeight);
+		ctx.fillStyle = "#38200f";
+		ctx.fillRect(bookX + 4, bookY + 5, 9, bookHeight - 10);
+		ctx.fillStyle = "#c18a42";
+		ctx.fillRect(bookX + 14, bookY + 12, 2, bookHeight - 24);
+		ctx.fillStyle = "#d6a354";
+		ctx.beginPath();
+		ctx.arc(bookX + bookWidth / 2, bookY + 18, 5, 0, Math.PI * 2);
+		ctx.fill();
 		
 		// Draw paper inside with pixel-style rounded corners
-		var paperX = bookX + 20;
-		var paperY = bookY + 20;
+		var paperX = bookX + 24;
+		var paperY = bookY + 18;
 		var paperWidth = bookWidth - 40;
-		var paperHeight = bookHeight - 40;
-		var paperCornerSize = 12;
+		var paperHeight = bookHeight - 36;
+		var paperCornerSize = 8;
 		
 		// Draw paper background
-		ctx.fillStyle = "#F5DEB3";
+		ctx.fillStyle = "#f1d7a3";
 		ctx.fillRect(paperX + paperCornerSize, paperY, paperWidth - paperCornerSize * 2, paperHeight);
 		ctx.fillRect(paperX, paperY + paperCornerSize, paperWidth, paperHeight - paperCornerSize * 2);
 		
 		// Draw paper corners
-		ctx.fillStyle = "#E8D0A9";
+		ctx.fillStyle = "#d9b77b";
 		// Top-left corner
 		ctx.fillRect(paperX, paperY, paperCornerSize, paperCornerSize);
 		// Top-right corner
@@ -2115,27 +2169,42 @@ var render = function () {
 		ctx.fillRect(paperX, paperY + paperHeight - paperCornerSize, paperCornerSize, paperCornerSize);
 		// Bottom-right corner
 		ctx.fillRect(paperX + paperWidth - paperCornerSize, paperY + paperHeight - paperCornerSize, paperCornerSize, paperCornerSize);
+		ctx.fillStyle = "rgba(95, 54, 20, 0.18)";
+		ctx.fillRect(paperX + paperWidth - 5, paperY + 8, 5, paperHeight - 16);
 		
 		// Draw title with pixel-style font
-		ctx.fillStyle = "#5D3A1A";
-		ctx.font = "bold 18px monospace";
+		ctx.fillStyle = "#5d3a1a";
+		ctx.font = "bold 18px " + UI_THEME.font;
 		ctx.textAlign = "center";
 		ctx.textBaseline = "middle";
-		ctx.fillText("留言簿", canvas.width / 2, bookY + 50);
+		ctx.fillText("留言簿", canvas.width / 2, bookY + 36);
+		ctx.fillStyle = "#9c6f38";
+		ctx.font = "9px " + UI_THEME.font;
+		ctx.fillText("PHANTOM ARCHIVE", canvas.width / 2, bookY + 51);
 		
 		// Draw decorative line
-		ctx.strokeStyle = "#8B4513";
+		ctx.strokeStyle = UI_THEME.border;
 		ctx.lineWidth = 2;
 		ctx.beginPath();
-		ctx.moveTo(paperX + 20, bookY + 70);
-		ctx.lineTo(paperX + paperWidth - 20, bookY + 70);
+		ctx.moveTo(paperX + 18, bookY + 64);
+		ctx.lineTo(paperX + paperWidth - 18, bookY + 64);
 		ctx.stroke();
 		
 		// Draw page indicator
-		ctx.fillStyle = "#666";
-		ctx.font = "12px monospace";
+		ctx.fillStyle = "#5d3a1a";
+		ctx.font = "12px " + UI_THEME.font;
 		ctx.textAlign = "right";
-		ctx.fillText("第 " + (messageBook.currentPage + 1) + "/" + messageBook.totalPages + " 页", paperX + paperWidth - 10, bookY + 65);
+		ctx.fillText("第 " + (messageBook.currentPage + 1) + " / " + messageBook.totalPages, paperX + paperWidth - 12, bookY + 52);
+
+		// Subtle page ruling makes the center area read as paper rather than a panel.
+		ctx.strokeStyle = "rgba(137, 99, 48, 0.18)";
+		ctx.lineWidth = 1;
+		for (var ruleY = bookY + 78; ruleY < bookY + bookHeight - 45; ruleY += 18) {
+			ctx.beginPath();
+			ctx.moveTo(paperX + 16, ruleY);
+			ctx.lineTo(paperX + paperWidth - 16, ruleY);
+			ctx.stroke();
+		}
 		
 		if (messageBook.messages.length === 0) {
 			if (messageBook.loading) {
@@ -2149,46 +2218,71 @@ var render = function () {
 			var currentPageMessages = getCurrentPageMessages();
 			currentPageMessages.forEach(function(msg, index) {
 				var cardX = paperX + 10;
-				var cardY = bookY + 84 + (index * 72);
+				var cardY = bookY + 76 + (index * 66);
 				var cardWidth = paperWidth - 20;
-				var cardHeight = 62;
+				var cardHeight = 60;
 				var userId = msg.legacy_user_id;
 				var avatar = messageBook.avatarImages[userId];
 				var username = messageBook.userCache[userId] || "匿名用户";
 				var time = msg.created_at ? new Date(msg.created_at).toLocaleDateString() : "未知时间";
 
 				if (index === messageBook.selectedIndex) {
-					drawRoundedPanel(cardX, cardY, cardWidth, cardHeight, "#fff8df", "#d08b35");
+					ctx.fillStyle = "rgba(82, 45, 18, 0.18)";
+					ctx.fillRect(cardX + 3, cardY + 3, cardWidth, cardHeight);
+					drawRoundedPanel(cardX, cardY, cardWidth, cardHeight, "rgba(255, 248, 220, 0.96)", "#b67c3e");
 				} else {
-					drawRoundedPanel(cardX, cardY, cardWidth, cardHeight, "#fffaf0", "#e5cfa2");
+					drawRoundedPanel(cardX, cardY, cardWidth, cardHeight, "rgba(255, 244, 205, 0.82)", "#d0aa70");
 				}
-				drawAvatar(avatar, cardX + 8, cardY + 8, 44);
+				drawAvatar(avatar, cardX + 6, cardY + 5, 42);
+				ctx.fillStyle = index === messageBook.selectedIndex ? "#7a4a1e" : "#6b482c";
+				ctx.font = "bold 10px " + UI_THEME.font;
+				ctx.textAlign = "right";
+				ctx.fillText(String(messageBook.currentPage * messageBook.messagesPerPage + index + 1).padStart(2, "0"), cardX + cardWidth - 8, cardY + 13);
 				ctx.textAlign = "left";
 				ctx.textBaseline = "top";
-				ctx.fillStyle = "#5d3a1a";
-				ctx.font = "bold 12px system-ui";
-				ctx.fillText(username, cardX + 60, cardY + 8);
-				ctx.fillStyle = "#9c8061";
-				ctx.font = "10px system-ui";
-				ctx.fillText(time, cardX + 60, cardY + 24);
-				ctx.fillStyle = "#42382f";
-				ctx.font = "11px system-ui";
+				ctx.fillStyle = "#3b2110";
+				ctx.font = "bold 12px " + UI_THEME.font;
+				ctx.fillText(truncateText(username, cardWidth - 66), cardX + 56, cardY + 8);
+				ctx.fillStyle = "#6b482c";
+				ctx.font = "10px " + UI_THEME.font;
+				ctx.fillText(truncateText(time, cardWidth - 66), cardX + 56, cardY + 22);
+				ctx.fillStyle = "#24170f";
+				ctx.font = "11px " + UI_THEME.font;
 				var messageLines = wrapText(String(msg.message || ""), cardWidth - 72);
-				ctx.fillText(messageLines[0] || "", cardX + 60, cardY + 40);
+				var detailHintX = cardX + cardWidth;
+				var textWidth = cardWidth - 92;
+				ctx.save();
+				ctx.beginPath();
+				ctx.rect(cardX + 56, cardY + 33, textWidth, cardHeight - 35);
+				ctx.clip();
+				ctx.fillText(truncateText(messageLines[0] || "", textWidth), cardX + 56, cardY + 35);
 				if (messageLines.length > 1) {
-					ctx.fillText((messageLines[1] || "").slice(0, 22) + "...", cardX + 60, cardY + 52);
+					ctx.fillText(truncateText(messageLines[1] || "", textWidth), cardX + 56, cardY + 47);
 				}
+				ctx.restore();
+				ctx.fillStyle = index === messageBook.selectedIndex ? "#fff8dc" : "#f1d7a3";
+				ctx.strokeStyle = "#8b5e3c";
+				ctx.lineWidth = 1.5;
+				ctx.beginPath();
+				ctx.arc(detailHintX, cardY + cardHeight / 2, 10, 0, Math.PI * 2);
+				ctx.fill();
+				ctx.stroke();
+				ctx.fillStyle = "#8b5e3c";
+				ctx.font = "bold 15px " + UI_THEME.font;
+				ctx.textAlign = "center";
+				ctx.textBaseline = "middle";
+				ctx.fillText("↵", detailHintX, cardY + cardHeight / 2);
 			});
 		}
 		
 		// Draw instructions with pixel-style font
-		ctx.fillStyle = "#666";
-		ctx.font = "12px monospace";
+		ctx.fillStyle = "#5d3a1a";
+		ctx.font = "12px " + UI_THEME.font;
 		ctx.textAlign = "center";
-		ctx.fillText("↑↓ 选择留言  |  ←→ 翻页  |  ESC 关闭", canvas.width / 2, bookY + bookHeight - 30);
-		ctx.fillStyle = "#8f6842";
-		ctx.font = "10px system-ui";
-		ctx.fillText("Enter 打开完整留言", canvas.width / 2, bookY + bookHeight - 14);
+		ctx.fillText("↑↓ 选择   ←→ 翻页   Enter 阅读   ESC 关闭", canvas.width / 2, bookY + bookHeight - 26);
+		ctx.fillStyle = "#fff3d1";
+		ctx.font = "10px " + UI_THEME.font;
+		ctx.fillText("Enter 打开完整留言", canvas.width / 2, bookY + bookHeight - 12);
 
 		if (messageBook.detailVisible) {
 			drawMessageDetail(getCurrentPageMessages()[messageBook.selectedIndex]);
@@ -2224,7 +2318,7 @@ function drawChatBubble(x, y, text) {
 	ctx.strokeStyle = "rgba(0, 0, 0, 0.4)";
 	ctx.lineWidth = 2;
 	// Calculate text width
-	ctx.font = "12px Helvetica"; // font
+	ctx.font = "12px Helvetica";
 	var padding = 4; // padding
 	var maxBubbleWidth = canvas.width - x - 10;
 	var bubbleHeight = 20; // bubble height
@@ -2270,11 +2364,11 @@ function drawAvatar(image, x, y, size) {
 }
 
 function drawMessageBookEmptyState(x, y, text) {
-	ctx.fillStyle = "#806a52";
-	ctx.font = "12px system-ui";
+	ctx.fillStyle = "#5d3a1a";
+	ctx.font = "12px " + UI_THEME.font;
 	ctx.textAlign = "center";
 	ctx.textBaseline = "middle";
-	ctx.fillText(text, x + 136, y + 150);
+	ctx.fillText(text, x + 222, y + 150);
 }
 
 function drawSystemNotice() {
@@ -2361,35 +2455,35 @@ function drawMessageDetail(message) {
 
 	ctx.fillStyle = "rgba(15, 10, 8, 0.78)";
 	ctx.fillRect(0, 0, canvas.width, canvas.height);
-	drawRoundedPanel(panelX, panelY, panelWidth, panelHeight, "#fff8df", "#d08b35");
+	drawRoundedPanel(panelX, panelY, panelWidth, panelHeight, UI_THEME.panel, UI_THEME.border);
 	drawAvatar(avatar, panelX + 16, panelY + 16, 48);
 	ctx.textAlign = "left";
 	ctx.textBaseline = "top";
-	ctx.fillStyle = "#5d3a1a";
-	ctx.font = "bold 15px system-ui";
-	ctx.fillText(username, panelX + 76, panelY + 19);
-	ctx.fillStyle = "#9c8061";
-	ctx.font = "11px system-ui";
-	ctx.fillText(message.created_at ? new Date(message.created_at).toLocaleString() : "未知时间", panelX + 76, panelY + 42);
-	ctx.strokeStyle = "#e1c58f";
+	ctx.fillStyle = UI_THEME.text;
+	ctx.font = "bold 15px " + UI_THEME.font;
+	ctx.fillText(truncateText(username, panelWidth - 110), panelX + 76, panelY + 19);
+	ctx.fillStyle = UI_THEME.muted;
+	ctx.font = "11px " + UI_THEME.font;
+	ctx.fillText(truncateText(message.created_at ? new Date(message.created_at).toLocaleString() : "未知时间", panelWidth - 110), panelX + 76, panelY + 42);
+	ctx.strokeStyle = "#6f5435";
 	ctx.beginPath();
 	ctx.moveTo(panelX + 16, panelY + 78);
 	ctx.lineTo(panelX + panelWidth - 16, panelY + 78);
 	ctx.stroke();
 
-	ctx.font = "13px system-ui";
+	ctx.font = "13px " + UI_THEME.font;
 	lines = wrapText(content, panelWidth - 32);
 	var visibleLines = Math.max(1, Math.floor((panelHeight - 122) / 20));
 	var maxScroll = Math.max(0, lines.length - visibleLines);
 	messageBook.detailScroll = Math.min(messageBook.detailScroll, maxScroll);
-	ctx.fillStyle = "#42382f";
+	ctx.fillStyle = UI_THEME.text;
 	for (var i = 0; i < visibleLines; i++) {
 		if (lines[i + messageBook.detailScroll] !== undefined) {
 			ctx.fillText(lines[i + messageBook.detailScroll], panelX + 16, panelY + 96 + i * 20);
 		}
 	}
-	ctx.fillStyle = "#8f6842";
-	ctx.font = "10px system-ui";
+	ctx.fillStyle = UI_THEME.muted;
+	ctx.font = "10px " + UI_THEME.font;
 	ctx.textAlign = "center";
 	ctx.fillText("↑↓ 阅读 · Enter / ESC 返回列表", canvas.width / 2, panelY + panelHeight - 16);
 }
