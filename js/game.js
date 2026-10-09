@@ -3,6 +3,8 @@ var canvas = document.getElementById("game-canvas") || document.createElement("c
 var ctx = canvas.getContext("2d");
 var appConfig = window.APP_CONFIG;
 var gameConfig = appConfig.GAME;
+var renderer = new PhantomRenderer(ctx);
+PhantomInputSystem.init(window);
 canvas.width = gameConfig.canvas.width;
 canvas.height = gameConfig.canvas.height;
 var runtimeStatus = document.getElementById("runtime-status");
@@ -453,13 +455,7 @@ function fetchMessages() {
 	messageBook.loading = true;
 	messageBook.error = null;
 	
-	PhantomEngine.withTimeout(fetch(messageBook.apiUrl, { headers: getMessageApiHeaders() }), gameConfig.requestTimeoutMs || 8000, "留言簿请求超时")
-		.then(function(response) {
-			if (!response.ok) {
-				throw new Error("留言簿接口返回 " + response.status + " " + response.statusText);
-			}
-			return response.json();
-		})
+	PhantomNetworkAdapter.json(messageBook.apiUrl, { headers: getMessageApiHeaders() }, "留言簿请求超时")
 		.then(function(messages) {
 			messageBook.messages = messages;
 			messageBook.loading = false;
@@ -478,13 +474,7 @@ function fetchMessages() {
 			// Fetch usernames for unique user IDs
 			var usernamePromises = uniqueUserIds.map(function(userId) {
 				if (!messageBook.usersUrl) return Promise.resolve([]);
-				return PhantomEngine.withTimeout(fetch(messageBook.usersUrl + "?select=username&id=eq." + encodeURIComponent(userId), { headers: getMessageApiHeaders() }), gameConfig.requestTimeoutMs || 8000, "用户名请求超时")
-					.then(function(response) {
-						if (!response.ok) {
-							throw new Error("用户接口返回 " + response.status + " " + response.statusText);
-						}
-						return response.json();
-					})
+				return PhantomNetworkAdapter.json(messageBook.usersUrl + "?select=username&id=eq." + encodeURIComponent(userId), { headers: getMessageApiHeaders() }, "用户名请求超时")
 					.then(function(users) {
 						if (users && users.length > 0) {
 							messageBook.userCache[userId] = users[0].username || "匿名用户";
@@ -767,7 +757,7 @@ var walls = {
 // Game objects
 var chatMessages = [];
 var previousChatMessages = []; // Store previous messages for comparison
-var characters = {};
+var characters = PhantomEntitySystem.items;
 var characterImages = {};
 var imagePaths = [];
 var availableImagePaths = [];
@@ -788,13 +778,7 @@ var hero = {
 };
 
 // Handle keyboard controls
-var keysDown = {};
-addEventListener("keydown", function (e) {
-	keysDown[e.keyCode] = true;
-}, false);
-addEventListener("keyup", function (e) {
-	delete keysDown[e.keyCode];
-}, false);
+var keysDown = PhantomInputSystem.keys;
 
 // Check if a point collides with any wall in the current scene
 // Now only checks a horizontal line at the bottom of the character (feet)
@@ -928,13 +912,9 @@ function loadCharacterImages() {
 
 // Fetch chat messages
 function fetchChatMessages() {
-	PhantomEngine.withTimeout(fetch(getApiUrl("onebotLatestText")), gameConfig.requestTimeoutMs || 8000, "聊天请求超时")
-		.then(function (response) {
-			if (!response.ok) throw new Error("聊天接口返回 " + response.status);
-			return response.json();
-		})
+	PhantomNetworkAdapter.json(getApiUrl("onebotLatestText"), {}, "聊天请求超时")
 		.then(function (data) {
-			processChatMessages(data);
+			processChatMessages(normalizeChatMessages(data));
 			reportStatus("");
 		})
 		.catch(function (error) {
@@ -943,16 +923,24 @@ function fetchChatMessages() {
 		});
 }
 
+// Normalize the backend's qqUserId shape into the engine's internal shape.
+function normalizeChatMessages(data) {
+	if (!Array.isArray(data)) return [];
+	return data.map(function (message) {
+		return {
+			userId: String(message.userId != null ? message.userId : message.qqUserId),
+			message: message.message == null ? "" : message.message,
+			timestamp: message.timestamp,
+			id: message.id
+		};
+	}).filter(function (message) {
+		return message.userId !== "undefined" && message.userId !== "null";
+	});
+}
+
 function loadUserProfile(userId) {
 	if (!messageBook.profilesUrl || messageBook.profileCache[userId]) return Promise.resolve();
-	return PhantomEngine.withTimeout(
-		fetch(messageBook.profilesUrl + "?select=*&legacy_user_id=eq." + encodeURIComponent(userId), { headers: getMessageApiHeaders() }),
-		gameConfig.requestTimeoutMs || 8000,
-		"头像请求超时"
-	).then(function(response) {
-		if (!response.ok) throw new Error("头像接口返回 " + response.status + " " + response.statusText);
-		return response.json();
-	}).then(function(profiles) {
+	return PhantomNetworkAdapter.json(messageBook.profilesUrl + "?select=*&legacy_user_id=eq." + encodeURIComponent(userId), { headers: getMessageApiHeaders() }, "头像请求超时").then(function(profiles) {
 		if (profiles && profiles.length > 0 && profiles[profiles.length - 1].data) {
 			var source = profiles[profiles.length - 1].data;
 			messageBook.profileCache[userId] = source;
@@ -2280,37 +2268,11 @@ function drawChatBubble(x, y, text) {
 }
 
 function drawRoundedPanel(x, y, width, height, fill, stroke) {
-	ctx.fillStyle = fill;
-	ctx.strokeStyle = stroke;
-	ctx.lineWidth = 1;
-	ctx.beginPath();
-	ctx.roundRect(x, y, width, height, 7);
-	ctx.fill();
-	ctx.stroke();
+	renderer.roundedPanel(x, y, width, height, fill, stroke, 7);
 }
 
 function drawAvatar(image, x, y, size) {
-	ctx.save();
-	ctx.beginPath();
-	ctx.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2);
-	ctx.clip();
-	ctx.fillStyle = "#d9b27c";
-	ctx.fillRect(x, y, size, size);
-	if (image && image.complete && image.naturalWidth > 0) {
-		ctx.drawImage(image, x, y, size, size);
-	} else {
-		ctx.fillStyle = "#8b5e3c";
-		ctx.beginPath();
-		ctx.arc(x + size / 2, y + 18, 9, 0, Math.PI * 2);
-		ctx.fill();
-		ctx.fillRect(x + 10, y + 28, size - 20, 20);
-	}
-	ctx.restore();
-	ctx.strokeStyle = "#b67c3e";
-	ctx.lineWidth = 2;
-	ctx.beginPath();
-	ctx.arc(x + size / 2, y + size / 2, size / 2 - 1, 0, Math.PI * 2);
-	ctx.stroke();
+	renderer.circleAvatar(image, x, y, size);
 }
 
 function drawMessageBookEmptyState(x, y, text) {

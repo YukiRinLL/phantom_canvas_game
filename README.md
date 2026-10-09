@@ -94,8 +94,11 @@ css/game.css            响应式布局和运行时状态样式
 js/config.js            环境无关的运行时配置
 js/engine-utils.js      可独立测试的引擎纯工具
 js/game.js              当前 Canvas 游戏运行时
+js/engine/              AssetManager、InputSystem、NetworkAdapter、SceneManager、EntitySystem、Renderer
 test/                   Node 内置测试
 ```
+
+引擎模块通过浏览器全局命名空间提供基础服务，`game.js` 仅负责当前 demo 的场景规则和组合。新增功能应优先扩展对应模块，而不是继续增加全局工具函数。
 
 ## Setup Instructions
 
