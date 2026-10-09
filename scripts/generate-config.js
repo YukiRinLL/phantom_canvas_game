@@ -28,6 +28,19 @@ const values = {
   requestTimeoutMs: Number(env("PHANTOM_REQUEST_TIMEOUT_MS") || 0)
 };
 
+// Build-log diagnostics: report whether each build-time variable reached the
+// build process. Values are masked, never printed in full.
+function describe(value) {
+  if (!value) return "MISSING";
+  if (value.length <= 10) return "set (" + value.length + " chars)";
+  return "set (" + value.length + " chars: " + value.slice(0, 6) + "..." + value.slice(-4) + ")";
+}
+console.log("[config] PHANTOM_SUPABASE_URL      = " + describe(values.supabaseUrl));
+console.log("[config] PHANTOM_SUPABASE_ANON_KEY = " + describe(values.anonKey));
+console.log("[config] PHANTOM_API_BASE          = " + describe(values.apiBase));
+console.log("[config] PHANTOM_POLL_INTERVAL_MS  = " + (values.pollIntervalMs || "MISSING"));
+console.log("[config] PHANTOM_REQUEST_TIMEOUT_MS= " + (values.requestTimeoutMs || "MISSING"));
+
 function jsString(value) {
   return JSON.stringify(value);
 }
