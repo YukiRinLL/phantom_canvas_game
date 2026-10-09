@@ -2639,7 +2639,6 @@ function drawMusicPlayer() {
 	ctx.fillStyle = "rgba(8, 6, 7, 0.82)";
 	ctx.fillRect(0, 0, canvas.width, canvas.height);
 	drawRoundedPanel(panelX, panelY, panelWidth, panelHeight, "#21191a", "#c79a59");
-	drawFantasyFrame(panelX, panelY, panelWidth, panelHeight);
 	ctx.fillStyle = "#312326";
 	ctx.fillRect(panelX + 1, panelY + 1, panelWidth - 2, 50);
 	ctx.fillStyle = UI_THEME.accent;
@@ -2747,13 +2746,14 @@ function drawMusicPlayer() {
 		});
 	}
 	ctx.restore();
+	drawFantasyFrame(panelX, panelY, panelWidth, panelHeight);
 }
 
 function drawFantasyFrame(x, y, width, height) {
 	ctx.save();
-	ctx.strokeStyle = "rgba(199, 154, 89, 0.5)";
-	ctx.fillStyle = "rgba(242, 196, 109, 0.8)";
-	ctx.lineWidth = 1;
+	ctx.strokeStyle = "rgba(242, 196, 109, 0.9)";
+	ctx.fillStyle = "rgba(242, 196, 109, 0.95)";
+	ctx.lineWidth = 1.5;
 	ctx.beginPath();
 	ctx.roundRect(x + 6, y + 6, width - 12, height - 12, 9);
 	ctx.stroke();
@@ -2762,16 +2762,21 @@ function drawFantasyFrame(x, y, width, height) {
 	drawFantasyCorner(x + 13, y + height - 13, 1, -1);
 	drawFantasyCorner(x + width - 13, y + height - 13, -1, -1);
 	var center = x + width / 2;
-	ctx.strokeStyle = "rgba(242, 196, 109, 0.8)";
+	ctx.strokeStyle = "rgba(242, 196, 109, 0.95)";
 	ctx.beginPath();
-	ctx.moveTo(center - 76, y + 50);
-	ctx.quadraticCurveTo(center - 52, y + 40, center - 28, y + 50);
-	ctx.moveTo(center + 28, y + 50);
-	ctx.quadraticCurveTo(center + 52, y + 40, center + 76, y + 50);
+	ctx.moveTo(center - 88, y + 51);
+	ctx.quadraticCurveTo(center - 62, y + 35, center - 34, y + 51);
+	ctx.moveTo(center + 34, y + 51);
+	ctx.quadraticCurveTo(center + 62, y + 35, center + 88, y + 51);
 	ctx.stroke();
 	ctx.beginPath();
-	ctx.arc(center, y + 49, 3, 0, Math.PI * 2);
+	ctx.arc(center, y + 49, 4, 0, Math.PI * 2);
 	ctx.fill();
+	ctx.beginPath();
+	ctx.moveTo(center - 9, y + 49);
+	ctx.lineTo(center, y + 39);
+	ctx.lineTo(center + 9, y + 49);
+	ctx.stroke();
 	ctx.restore();
 }
 
@@ -2780,14 +2785,14 @@ function drawFantasyCorner(x, y, scaleX, scaleY) {
 	ctx.translate(x, y);
 	ctx.scale(scaleX, scaleY);
 	ctx.beginPath();
-	ctx.moveTo(0, 18);
-	ctx.quadraticCurveTo(0, 5, 12, 0);
-	ctx.quadraticCurveTo(8, 10, 18, 12);
-	ctx.moveTo(4, 14);
-	ctx.quadraticCurveTo(10, 6, 16, 5);
+	ctx.moveTo(0, 24);
+	ctx.quadraticCurveTo(0, 7, 15, 0);
+	ctx.quadraticCurveTo(10, 13, 24, 16);
+	ctx.moveTo(5, 19);
+	ctx.quadraticCurveTo(13, 7, 21, 6);
 	ctx.stroke();
 	ctx.beginPath();
-	ctx.arc(5, 5, 2, 0, Math.PI * 2);
+	ctx.arc(6, 6, 3, 0, Math.PI * 2);
 	ctx.fill();
 	ctx.restore();
 }
