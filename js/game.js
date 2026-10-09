@@ -2016,15 +2016,20 @@ var render = function () {
 			if (msg.alpha > 0) {
 				ctx.globalAlpha = msg.alpha;
 				// Position bubbles above hero (newest at bottom)
-				var bubbleIndex = hero.messages.length - 1 - index;
-				ctx.save();
-				if (currentScene === "indoor") {
-					// Apply camera and zoom for indoor scene
-					ctx.translate(-camera.x, -camera.y);
-					ctx.scale(indoorZoom, indoorZoom);
-				}
-				drawChatBubble(hero.x + 32, hero.y - 18 - (bubbleIndex * 24), msg.content);
-				ctx.restore();
+					var bubbleIndex = hero.messages.length - 1 - index;
+					ctx.save();
+					if (currentScene === "indoor") {
+						// Convert the world anchor to screen coordinates, but keep the
+						// bubble itself in screen space so its size matches outdoor scenes.
+						drawChatBubble(
+							(hero.x + 32) * indoorZoom - camera.x,
+							(hero.y - 18 - (bubbleIndex * 24)) * indoorZoom - camera.y,
+							msg.content
+						);
+					} else {
+						drawChatBubble(hero.x + 32, hero.y - 18 - (bubbleIndex * 24), msg.content);
+					}
+					ctx.restore();
 				ctx.globalAlpha = 1;
 			}
 		});
