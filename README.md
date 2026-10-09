@@ -32,6 +32,8 @@ npm run dev
 
 然后访问 `http://localhost:3000`（或 Python server 使用的端口）。
 
+留言簿中使用 `↑↓` 选择留言，按 `Enter` 打开当前留言的完整内容；详情页中使用 `↑↓` 阅读，按 `Enter` 或 `ESC` 返回列表。
+
 校验源码和运行单元测试：
 
 ```bash

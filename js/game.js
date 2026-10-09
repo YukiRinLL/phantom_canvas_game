@@ -427,13 +427,18 @@ var messageBook = {
 	selectedIndex: 0,
 	apiUrl: buildSupabaseQueryUrl("messages", "*", {}),
 	usersUrl: appConfig.SUPABASE_URL + "/rest/v1/users",
+	profilesUrl: appConfig.SUPABASE_URL + "/rest/v1/user_profile",
 	apiKey: appConfig.ANON_KEY || "",
 	loading: false,
 	error: null,
 	currentPage: 0,
 	messagesPerPage: 3,
 	totalPages: 1,
-	userCache: {} // Cache for usernames
+	detailVisible: false,
+	detailScroll: 0,
+	userCache: {},
+	profileCache: {},
+	avatarImages: {}
 };
 
 // Fetch messages from Supabase API
@@ -482,11 +487,14 @@ function fetchMessages() {
 					})
 					.then(function(users) {
 						if (users && users.length > 0) {
-							messageBook.userCache[userId] = users[0].username;
+							messageBook.userCache[userId] = users[0].username || "匿名用户";
 						}
+						return loadUserProfile(userId);
 					})
 					.catch(function(error) {
 						console.error("Error fetching username for user " + userId + ":", error);
+						messageBook.userCache[userId] = "匿名用户";
+						return loadUserProfile(userId);
 					});
 			});
 			
@@ -933,6 +941,28 @@ function fetchChatMessages() {
 			console.error('Error fetching chat messages:', error);
 			reportStatus("聊天连接不可用: " + error.message, true);
 		});
+}
+
+function loadUserProfile(userId) {
+	if (!messageBook.profilesUrl || messageBook.profileCache[userId]) return Promise.resolve();
+	return PhantomEngine.withTimeout(
+		fetch(messageBook.profilesUrl + "?select=*&legacy_user_id=eq." + encodeURIComponent(userId), { headers: getMessageApiHeaders() }),
+		gameConfig.requestTimeoutMs || 8000,
+		"头像请求超时"
+	).then(function(response) {
+		if (!response.ok) throw new Error("头像接口返回 " + response.status + " " + response.statusText);
+		return response.json();
+	}).then(function(profiles) {
+		if (profiles && profiles.length > 0 && profiles[profiles.length - 1].data) {
+			var source = profiles[profiles.length - 1].data;
+			messageBook.profileCache[userId] = source;
+			var avatar = new Image();
+			avatar.onload = function() { messageBook.avatarImages[userId] = avatar; };
+			avatar.src = source;
+		}
+	}).catch(function(error) {
+		console.warn("Unable to load profile for user " + userId + ":", error.message);
+	});
 }
 
 // Supabase accepts these headers when configured, but the public endpoint can
@@ -1602,7 +1632,24 @@ var update = function (modifier) {
 
 	// Handle message book navigation
 	if (messageBook.visible) {
-		if (keysDown[38]) { // Up arrow
+		if (messageBook.detailVisible) {
+			if (keysDown[38]) {
+				messageBook.detailScroll = Math.max(0, messageBook.detailScroll - 1);
+				delete keysDown[38];
+			} else if (keysDown[40]) {
+				messageBook.detailScroll++;
+				delete keysDown[40];
+			} else if (keysDown[13] || keysDown[27]) {
+				messageBook.detailVisible = false;
+				messageBook.detailScroll = 0;
+				delete keysDown[13];
+				delete keysDown[27];
+			}
+		} else if (keysDown[13]) {
+			messageBook.detailVisible = true;
+			messageBook.detailScroll = 0;
+			delete keysDown[13];
+		} else if (keysDown[38]) { // Up arrow
 			if (messageBook.messages.length > 0) {
 				if (messageBook.selectedIndex > 0) {
 					messageBook.selectedIndex--;
@@ -1639,6 +1686,7 @@ var update = function (modifier) {
 			delete keysDown[39];
 		} else if (keysDown[27]) { // Escape key
 			messageBook.visible = false;
+			messageBook.detailVisible = false;
 			delete keysDown[27];
 		}
 	}
@@ -2107,56 +2155,46 @@ var render = function () {
 		ctx.textAlign = "right";
 		ctx.fillText("第 " + (messageBook.currentPage + 1) + "/" + messageBook.totalPages + " 页", paperX + paperWidth - 10, bookY + 65);
 		
-		// Draw messages with pixel-style font
-		ctx.fillStyle = "#333";
-		ctx.font = "14px monospace";
-		ctx.textAlign = "left";
-		ctx.textBaseline = "top";
-		
 		if (messageBook.messages.length === 0) {
 			if (messageBook.loading) {
-				ctx.fillText("加载中...", paperX + 20, bookY + 90);
+				drawMessageBookEmptyState(paperX, bookY, "正在读取留言...");
 			} else if (messageBook.error) {
-				ctx.fillStyle = "#ff0000";
-				ctx.fillText("加载失败: " + messageBook.error, paperX + 20, bookY + 90);
+				drawMessageBookEmptyState(paperX, bookY, "加载失败: " + messageBook.error);
 			} else {
-				ctx.fillText("暂无留言", paperX + 20, bookY + 90);
+				drawMessageBookEmptyState(paperX, bookY, "暂无留言");
 			}
 		} else {
 			var currentPageMessages = getCurrentPageMessages();
 			currentPageMessages.forEach(function(msg, index) {
-				var y = bookY + 90 + (index * 80);
+				var cardX = paperX + 10;
+				var cardY = bookY + 84 + (index * 72);
+				var cardWidth = paperWidth - 20;
+				var cardHeight = 62;
+				var userId = msg.legacy_user_id;
+				var avatar = messageBook.avatarImages[userId];
+				var username = messageBook.userCache[userId] || "匿名用户";
+				var time = msg.created_at ? new Date(msg.created_at).toLocaleDateString() : "未知时间";
+
 				if (index === messageBook.selectedIndex) {
-					// Draw selected message background
-					ctx.fillStyle = "#E6E6FA";
-					ctx.fillRect(paperX + 10, y - 5, paperWidth - 20, 70);
-					ctx.fillStyle = "#333";
-				}
-				
-				// Display username and message
-				var username = messageBook.userCache[msg.legacy_user_id];
-				if (username) {
-					ctx.font = "bold 14px monospace";
-					ctx.fillText(username + ":", paperX + 20, y);
+					drawRoundedPanel(cardX, cardY, cardWidth, cardHeight, "#fff8df", "#d08b35");
 				} else {
-					ctx.font = "bold 14px monospace";
-					ctx.fillStyle = "#999";
-					ctx.fillText("加载用户名...", paperX + 20, y);
-					ctx.fillStyle = "#333";
+					drawRoundedPanel(cardX, cardY, cardWidth, cardHeight, "#fffaf0", "#e5cfa2");
 				}
-				
-				// Wrap message text
-				ctx.font = "12px monospace";
-				var messageLines = wrapText(msg.message, paperWidth - 50);
-				var messageY = y + 20;
-				for (var i = 0; i < Math.min(messageLines.length, 3); i++) {
-					ctx.fillText(messageLines[i], paperX + 20, messageY);
-					messageY += 14;
-				}
-				
-				// Show ellipsis if message is too long
-				if (messageLines.length > 3) {
-					ctx.fillText("...", paperX + 20, messageY);
+				drawAvatar(avatar, cardX + 8, cardY + 8, 44);
+				ctx.textAlign = "left";
+				ctx.textBaseline = "top";
+				ctx.fillStyle = "#5d3a1a";
+				ctx.font = "bold 12px system-ui";
+				ctx.fillText(username, cardX + 60, cardY + 8);
+				ctx.fillStyle = "#9c8061";
+				ctx.font = "10px system-ui";
+				ctx.fillText(time, cardX + 60, cardY + 24);
+				ctx.fillStyle = "#42382f";
+				ctx.font = "11px system-ui";
+				var messageLines = wrapText(String(msg.message || ""), cardWidth - 72);
+				ctx.fillText(messageLines[0] || "", cardX + 60, cardY + 40);
+				if (messageLines.length > 1) {
+					ctx.fillText((messageLines[1] || "").slice(0, 22) + "...", cardX + 60, cardY + 52);
 				}
 			});
 		}
@@ -2166,6 +2204,13 @@ var render = function () {
 		ctx.font = "12px monospace";
 		ctx.textAlign = "center";
 		ctx.fillText("↑↓ 选择留言  |  ←→ 翻页  |  ESC 关闭", canvas.width / 2, bookY + bookHeight - 30);
+		ctx.fillStyle = "#8f6842";
+		ctx.font = "10px system-ui";
+		ctx.fillText("Enter 打开完整留言", canvas.width / 2, bookY + bookHeight - 14);
+
+		if (messageBook.detailVisible) {
+			drawMessageDetail(getCurrentPageMessages()[messageBook.selectedIndex]);
+		}
 	}
 
 	// Draw debug info for hero
@@ -2232,6 +2277,95 @@ function drawChatBubble(x, y, text) {
 	ctx.textAlign = "left";
 	ctx.textBaseline = "middle";
 	ctx.fillText(displayText, bubbleX + padding, bubbleY + bubbleHeight / 2);
+}
+
+function drawRoundedPanel(x, y, width, height, fill, stroke) {
+	ctx.fillStyle = fill;
+	ctx.strokeStyle = stroke;
+	ctx.lineWidth = 1;
+	ctx.beginPath();
+	ctx.roundRect(x, y, width, height, 7);
+	ctx.fill();
+	ctx.stroke();
+}
+
+function drawAvatar(image, x, y, size) {
+	ctx.save();
+	ctx.beginPath();
+	ctx.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2);
+	ctx.clip();
+	ctx.fillStyle = "#d9b27c";
+	ctx.fillRect(x, y, size, size);
+	if (image && image.complete && image.naturalWidth > 0) {
+		ctx.drawImage(image, x, y, size, size);
+	} else {
+		ctx.fillStyle = "#8b5e3c";
+		ctx.beginPath();
+		ctx.arc(x + size / 2, y + 18, 9, 0, Math.PI * 2);
+		ctx.fill();
+		ctx.fillRect(x + 10, y + 28, size - 20, 20);
+	}
+	ctx.restore();
+	ctx.strokeStyle = "#b67c3e";
+	ctx.lineWidth = 2;
+	ctx.beginPath();
+	ctx.arc(x + size / 2, y + size / 2, size / 2 - 1, 0, Math.PI * 2);
+	ctx.stroke();
+}
+
+function drawMessageBookEmptyState(x, y, text) {
+	ctx.fillStyle = "#806a52";
+	ctx.font = "12px system-ui";
+	ctx.textAlign = "center";
+	ctx.textBaseline = "middle";
+	ctx.fillText(text, x + 136, y + 150);
+}
+
+function drawMessageDetail(message) {
+	if (!message) return;
+	var panelX = 38;
+	var panelY = 48;
+	var panelWidth = canvas.width - 76;
+	var panelHeight = canvas.height - 96;
+	var userId = message.legacy_user_id;
+	var username = messageBook.userCache[userId] || "匿名用户";
+	var avatar = messageBook.avatarImages[userId];
+	var content = String(message.message || "");
+	var lines;
+
+	ctx.fillStyle = "rgba(15, 10, 8, 0.78)";
+	ctx.fillRect(0, 0, canvas.width, canvas.height);
+	drawRoundedPanel(panelX, panelY, panelWidth, panelHeight, "#fff8df", "#d08b35");
+	drawAvatar(avatar, panelX + 16, panelY + 16, 48);
+	ctx.textAlign = "left";
+	ctx.textBaseline = "top";
+	ctx.fillStyle = "#5d3a1a";
+	ctx.font = "bold 15px system-ui";
+	ctx.fillText(username, panelX + 76, panelY + 19);
+	ctx.fillStyle = "#9c8061";
+	ctx.font = "11px system-ui";
+	ctx.fillText(message.created_at ? new Date(message.created_at).toLocaleString() : "未知时间", panelX + 76, panelY + 42);
+	ctx.strokeStyle = "#e1c58f";
+	ctx.beginPath();
+	ctx.moveTo(panelX + 16, panelY + 78);
+	ctx.lineTo(panelX + panelWidth - 16, panelY + 78);
+	ctx.stroke();
+
+	ctx.font = "13px system-ui";
+	lines = wrapText(content, panelWidth - 32);
+	var visibleLines = Math.max(1, Math.floor((panelHeight - 122) / 20));
+	var maxScroll = Math.max(0, lines.length - visibleLines);
+	messageBook.detailScroll = Math.min(messageBook.detailScroll, maxScroll);
+	ctx.fillStyle = "#42382f";
+	for (var i = 0; i < visibleLines; i++) {
+		if (lines[i + messageBook.detailScroll] !== undefined) {
+			ctx.fillText(lines[i + messageBook.detailScroll], panelX + 16, panelY + 96 + i * 20);
+		}
+	}
+	ctx.fillStyle = "#8f6842";
+	ctx.font = "10px system-ui";
+	ctx.textAlign = "center";
+	ctx.fillText("↑↓ 阅读 · Enter / ESC 返回列表", canvas.width / 2, panelY + panelHeight - 16);
 }
 
 // The main game loop
