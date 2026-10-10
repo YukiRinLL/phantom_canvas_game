@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="Phantom Canvas mobile controls">
+  <title>Phantom Canvas · 移动端</title>
+  <link rel="stylesheet" href="css/game.css">
+</head>
+<body class="mobile-page">
+  <main id="game-shell" class="mobile-shell" aria-label="Phantom Canvas 移动端游戏">
+    <div class="console-body">
+      <div class="screen-bezel">
+        <div id="game-container">
+          <canvas id="game-canvas" width="512" height="480" aria-label="游戏画布"></canvas>
+          <div id="runtime-status" role="status" aria-live="polite"></div>
+        </div>
+      </div>
+      <div class="console-divider"><span>PLAYER 1</span><i></i></div>
+      <section class="control-panel" aria-label="游戏操作面板">
+        <div class="control-copy"><strong>PLAYER ONE</strong><span>按住方向键移动　·　靠近目标后使用交互键</span></div>
+        <div class="control-layout">
+          <div class="d-pad" aria-label="方向键">
+            <button class="control-button d-pad-up" type="button" data-key="38" aria-label="向上">▲</button>
+            <button class="control-button d-pad-left" type="button" data-key="37" aria-label="向左">◀</button>
+            <span class="d-pad-center" aria-hidden="true"></span>
+            <button class="control-button d-pad-right" type="button" data-key="39" aria-label="向右">▶</button>
+            <button class="control-button d-pad-down" type="button" data-key="40" aria-label="向下">▼</button>
+          </div>
+          <div class="action-pad" aria-label="交互键">
+            <div class="action-slot slot-triangle"><button class="control-button action-triangle" type="button" data-key="27" aria-label="三角键，返回"><i class="button-symbol symbol-triangle" aria-hidden="true"></i></button><span class="action-hint"><i>△</i> 返回</span></div>
+            <div class="action-slot slot-square"><button class="control-button action-square" type="button" data-key="80" aria-label="方形键，通知"><i class="button-symbol symbol-square" aria-hidden="true"></i></button><span class="action-hint"><i>□</i> 通知</span></div>
+            <div class="action-slot slot-circle"><button class="control-button action-circle" type="button" data-key="70" aria-label="圆形键，交互"><i class="button-symbol symbol-circle" aria-hidden="true"></i></button><span class="action-hint"><i>○</i> 交互</span></div>
+            <div class="action-slot slot-cross"><button class="control-button action-cross" type="button" data-key="13" aria-label="叉形键，确认"><i class="button-symbol symbol-cross" aria-hidden="true"></i></button><span class="action-hint"><i>×</i> 确认</span></div>
+          </div>
+        </div>
+      </section>
+      <div class="console-footer"><span>POWER</span><span>◈ PHANTOM EDITION ◈</span><span>© 2026</span></div>
+    </div>
+    <p class="game-help">方向键 / WASD 也可移动 · F 交互 · Enter 确认 · ESC 返回</p>
+  </main>
+  <script src="js/config.js"></script>
+  <script src="js/config.local.js"></script>
+  <script src="js/config.runtime.js"></script>
+  <script src="js/engine-utils.js"></script>
+  <script src="js/engine/asset-manager.js"></script>
+  <script src="js/engine/input-system.js"></script>
+  <script src="js/engine/network-adapter.js"></script>
+  <script src="js/engine/scene-manager.js"></script>
+  <script src="js/engine/transition-system.js"></script>
+  <script src="js/engine/entity-system.js"></script>
+  <script src="js/engine/renderer.js"></script>
+  <script src="js/engine/audio-system.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/mobile-controls.js"></script>
+</body>
+</html>

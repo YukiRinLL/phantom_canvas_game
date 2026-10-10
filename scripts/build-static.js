@@ -26,6 +26,7 @@ fs.mkdirSync(outDir, { recursive: true });
 
 // Runtime entry and asset directories.
 fs.copyFileSync(path.join(root, "index.html"), path.join(outDir, "index.html"));
+fs.copyFileSync(path.join(root, "mobile.html"), path.join(outDir, "mobile.html"));
 for (const dir of ["css", "images", "audio"]) {
   const src = path.join(root, dir);
   if (fs.existsSync(src)) {
