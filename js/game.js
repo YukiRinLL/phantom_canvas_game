@@ -25,6 +25,7 @@ var systemNotice = {
 	visible: false,
 	button: { x: 464, y: 5, width: 42, height: 24 },
 	scroll: 0,
+	selectedIndex: 0,
 	tab: "activity",
 	items: { activity: [], domestic: [], global: [], globalTopics: [] },
 	loaded: { activity: false, domestic: false, global: false, globalTopics: false },
@@ -46,6 +47,10 @@ canvas.addEventListener("click", function (event) {
 	}
 	if (systemNotice.visible && isPointInSystemNoticeTab(x, y)) {
 		selectSystemNoticeTab(systemNotice.tabIndexAtPoint(x));
+		return;
+	}
+	if (systemNotice.visible && isPointInSystemNoticeItem(x, y)) {
+		openSystemNoticeItem(systemNotice.itemIndexAtPoint(y));
 		return;
 	}
 	if (currentScene === "indoor" && isPointInInteractionHint(x, y) &&
@@ -86,6 +91,7 @@ function selectSystemNoticeTab(index) {
 	if (index < 0 || index >= tabs.length) return;
 	systemNotice.tab = tabs[index];
 	systemNotice.scroll = 0;
+	systemNotice.selectedIndex = 0;
 	loadSystemNoticeTab(systemNotice.tab);
 }
 function isPointInSystemNoticeTab(x, y) {
@@ -94,6 +100,23 @@ function isPointInSystemNoticeTab(x, y) {
 systemNotice.tabIndexAtPoint = function (x) {
 	return Math.max(0, Math.min(NOTICE_TABS.length - 1, Math.floor((x - 52) / ((canvas.width - 104) / NOTICE_TABS.length))));
 };
+systemNotice.itemIndexAtPoint = function (y) {
+	return systemNotice.scroll + Math.floor((y - 119) / 25);
+};
+function isPointInSystemNoticeItem(x, y) {
+	return x >= 56 && x <= canvas.width - 56 && y >= 119 && y <= 216;
+}
+function openSystemNoticeItem(index) {
+	var item = (systemNotice.items[systemNotice.tab] || [])[index];
+	if (item && item.linkUrl) window.open(item.linkUrl, "_blank", "noopener,noreferrer");
+}
+function keepSystemNoticeSelectionVisible() {
+	var items = systemNotice.items[systemNotice.tab] || [];
+	var visibleCount = 4;
+	if (systemNotice.selectedIndex < systemNotice.scroll) systemNotice.scroll = systemNotice.selectedIndex;
+	if (systemNotice.selectedIndex >= systemNotice.scroll + visibleCount) systemNotice.scroll = systemNotice.selectedIndex - visibleCount + 1;
+	systemNotice.scroll = Math.max(0, Math.min(systemNotice.scroll, Math.max(0, items.length - visibleCount)));
+}
 function loadSystemNoticeTab(tab) {
 	if (systemNotice.loaded[tab] || systemNotice.loading[tab]) return;
 	systemNotice.loading[tab] = true;
@@ -2130,11 +2153,17 @@ var update = function (modifier) {
 			selectSystemNoticeTab(systemNoticeTabIndex() + 1);
 			delete keysDown[39];
 		} else if (keysDown[38]) {
-			systemNotice.scroll = Math.max(0, systemNotice.scroll - 1);
+			systemNotice.selectedIndex = Math.max(0, systemNotice.selectedIndex - 1);
+			keepSystemNoticeSelectionVisible();
 			delete keysDown[38];
 		} else if (keysDown[40]) {
-			systemNotice.scroll++;
+			var noticeItems = systemNotice.items[systemNotice.tab] || [];
+			systemNotice.selectedIndex = Math.min(Math.max(0, noticeItems.length - 1), systemNotice.selectedIndex + 1);
+			keepSystemNoticeSelectionVisible();
 			delete keysDown[40];
+		} else if (keysDown[13]) {
+			openSystemNoticeItem(systemNotice.selectedIndex);
+			delete keysDown[13];
 		}
 	}
 };
@@ -3097,6 +3126,8 @@ function drawSystemNotice() {
 	var panelWidth = canvas.width - 84;
 	var panelHeight = 210;
 	drawRoundedPanel(panelX, panelY, panelWidth, panelHeight, "rgba(30, 24, 20, 0.96)", "#f2c46d");
+	ctx.fillStyle = "rgba(242, 196, 109, 0.08)";
+	ctx.fillRect(panelX + 1, panelY + 1, panelWidth - 2, 34);
 	ctx.fillStyle = "#f2c46d";
 	ctx.font = "bold 16px system-ui";
 	ctx.textAlign = "left";
@@ -3106,8 +3137,13 @@ function drawSystemNotice() {
 	ctx.font = "11px system-ui";
 	ctx.textAlign = "right";
 	ctx.fillText("P / ESC 关闭", panelX + panelWidth - 18, panelY + 20);
+	ctx.strokeStyle = "rgba(242, 196, 109, 0.35)";
+	ctx.beginPath();
+	ctx.moveTo(panelX + 12, panelY + 34);
+	ctx.lineTo(panelX + panelWidth - 12, panelY + 34);
+	ctx.stroke();
 
-	var tabs = ["活动", "新闻", "news", "topics"];
+	var tabs = ["活动", "新闻", "NEWS", "TOPICS"];
 	var activeTab = systemNoticeTabIndex();
 	var tabWidth = (panelWidth - 20) / tabs.length;
 	ctx.font = "bold 11px system-ui";
@@ -3120,7 +3156,14 @@ function drawSystemNotice() {
 		ctx.fillText(tab, tabX + (tabWidth - 3) / 2, panelY + 55);
 	});
 	var messages = systemNotice.items[systemNotice.tab] || [];
-	var visibleCount = 5;
+	// Keep the list above the footer so the navigation hint never overlaps content.
+	var visibleCount = 4;
+	var contentTop = panelY + 92;
+	var footerY = panelY + panelHeight - 18;
+	var pageY = footerY - 16;
+	var rowX = panelX + 14;
+	var rowWidth = panelWidth - 28;
+	var rowHeight = 22;
 	var maxScroll = Math.max(0, messages.length - visibleCount);
 	systemNotice.scroll = Math.min(systemNotice.scroll, maxScroll);
 	ctx.textAlign = "left";
@@ -3131,10 +3174,10 @@ function drawSystemNotice() {
 		var emptyText = systemNotice.loading[systemNotice.tab]
 			? "正在加载新闻..."
 			: (systemNotice.errors[systemNotice.tab] || "暂无新闻");
-		ctx.fillText(emptyText, panelX + 18, panelY + 92);
+		ctx.fillText(emptyText, panelX + 18, contentTop);
 		if (systemNotice.errors[systemNotice.tab]) {
 			ctx.textAlign = "right";
-			ctx.fillText("点击当前标签重试", panelX + panelWidth - 18, panelY + 92);
+			ctx.fillText("点击当前标签重试", panelX + panelWidth - 18, contentTop);
 			ctx.textAlign = "left";
 		}
 	} else {
@@ -3142,19 +3185,32 @@ function drawSystemNotice() {
 		visibleMessages.forEach(function (message, index) {
 			var title = message.title || message.content || "";
 			var lines = wrapText(title, panelWidth - 36);
-			var y = panelY + 92 + index * 26;
+			var rowTop = contentTop + index * 25 - 15;
+			var y = rowTop + rowHeight / 2;
+			ctx.fillStyle = index % 2 === 0 ? "rgba(70, 56, 44, 0.42)" : "rgba(50, 40, 34, 0.42)";
+			ctx.fillRect(rowX, rowTop, rowWidth, rowHeight);
+			if (systemNotice.selectedIndex === systemNotice.scroll + index) {
+				ctx.strokeStyle = UI_THEME.accent;
+				ctx.lineWidth = 1;
+				ctx.strokeRect(rowX, rowTop, rowWidth, rowHeight);
+			}
+			ctx.fillStyle = "rgba(242, 196, 109, 0.18)";
+			ctx.fillRect(rowX, rowTop + rowHeight - 1, rowWidth, 1);
 			ctx.fillStyle = index === visibleMessages.length - 1 && systemNotice.scroll === maxScroll ? "#fff3d1" : "#d2c2ae";
-			ctx.fillText(truncateText(lines[0] || "", panelWidth - 36), panelX + 18, y);
-			if (lines.length > 1) ctx.fillText("...", panelX + panelWidth - 36, y + 13);
+			ctx.textBaseline = "middle";
+			ctx.fillText(truncateText(lines[0] || "", rowWidth - 16), rowX + 8, y);
+			if (lines.length > 1) ctx.fillText("...", rowX + rowWidth - 16, y);
 		});
+		ctx.fillStyle = "rgba(30, 24, 20, 0.9)";
+		ctx.fillRect(panelX + 1, footerY - 8, panelWidth - 2, 18);
 		ctx.fillStyle = "#9f8b76";
 		ctx.font = "10px " + UI_THEME.font;
 		ctx.textAlign = "right";
-		ctx.fillText((systemNotice.scroll + 1) + "-" + Math.min(systemNotice.scroll + visibleCount, messages.length) + " / " + messages.length, panelX + panelWidth - 18, panelY + panelHeight - 18);
+		ctx.fillText((systemNotice.scroll + 1) + "-" + Math.min(systemNotice.scroll + visibleCount, messages.length) + " / " + messages.length, panelX + panelWidth - 18, pageY);
 		if (maxScroll > 0) {
 			var trackX = panelX + panelWidth - 12;
 			var trackY = panelY + 54;
-			var trackHeight = panelHeight - 86;
+			var trackHeight = panelHeight - 108;
 			var thumbHeight = Math.max(22, trackHeight * visibleCount / messages.length);
 			var thumbY = trackY + (trackHeight - thumbHeight) * (systemNotice.scroll / maxScroll);
 			ctx.fillStyle = "rgba(242, 196, 109, 0.22)";
@@ -3168,10 +3224,13 @@ function drawSystemNotice() {
 			if (systemNotice.scroll < maxScroll) ctx.fillText("▼", trackX + 2, trackY + trackHeight + 13);
 		}
 	}
+	ctx.fillStyle = "rgba(242, 196, 109, 0.12)";
+	ctx.fillRect(panelX + 1, footerY - 8, panelWidth - 2, 18);
 	ctx.fillStyle = UI_THEME.muted;
 	ctx.font = "10px " + UI_THEME.font;
 	ctx.textAlign = "left";
-	ctx.fillText(messages.length > visibleCount ? "↑↓ 滚动 · ESC 关闭" : "ESC 关闭", panelX + 18, panelY + panelHeight - 18);
+	ctx.textBaseline = "middle";
+	ctx.fillText(messages.length > visibleCount ? "←→ 切换 · ↑↓ 滚动 · ESC 关闭" : "←→ 切换 · ESC 关闭", panelX + 18, footerY);
 }
 
 function drawMessageDetail(message) {
