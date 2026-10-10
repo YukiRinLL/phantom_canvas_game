@@ -14,7 +14,7 @@
     activeKeys[code] = true;
     button.classList.add("is-pressed");
     if (typeof navigator.vibrate === "function") {
-      navigator.vibrate(code >= 37 && code <= 40 ? 12 : 24);
+      navigator.vibrate(code >= 37 && code <= 40 ? 28 : [36, 24, 42]);
     }
     sendKey("keydown", code);
   }

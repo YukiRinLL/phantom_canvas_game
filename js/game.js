@@ -38,6 +38,12 @@ canvas.addEventListener("click", function (event) {
 		toggleSystemNotice();
 		return;
 	}
+	if (currentScene === "indoor" && isPointInInteractionHint(x, y) &&
+		(interactiveElements.lectern.interactable || interactiveElements.organ.interactable)) {
+		// Use the same input path as the keyboard F key so every interaction stays consistent.
+		keysDown[70] = true;
+		return;
+	}
 	if (messageBook && messageBook.visible && !messageBook.detailVisible) {
 		openMessageDetailAtPoint(x, y);
 	}
@@ -2061,6 +2067,27 @@ var render = function () {
 		ctx.fillRect(0, 0, canvas.width, canvas.height);
 	}
 
+	// Interaction markers sit between the background and scene objects so walls
+	// and foreground blocks can naturally cover them.
+	if (currentScene === "indoor") {
+		var lecternMarker = interactiveElements.lectern;
+		var organMarker = interactiveElements.organ;
+		ctx.save();
+		ctx.translate(-camera.x, -camera.y);
+		ctx.scale(indoorZoom, indoorZoom);
+		ctx.globalAlpha = lecternMarker.flashAlpha * 0.8;
+		ctx.fillStyle = "rgba(255, 0, 0, 0.8)";
+		ctx.beginPath();
+		ctx.arc(lecternMarker.x + lecternMarker.width / 2, lecternMarker.y + lecternMarker.height / 2, 2, 0, Math.PI * 2);
+		ctx.fill();
+		ctx.globalAlpha = organMarker.flashAlpha * 0.8;
+		ctx.beginPath();
+		ctx.arc(organMarker.pointX, organMarker.pointY, 2, 0, Math.PI * 2);
+		ctx.fill();
+		ctx.restore();
+		ctx.globalAlpha = 1;
+	}
+
 	// 调试模式下绘制indoor场景的碰撞区域（红色半透明）
 	if (debugMode && currentScene === "indoor") {
 		var currentWalls = walls[currentScene] || [];
@@ -2242,33 +2269,11 @@ var render = function () {
 	if (currentScene === "indoor") {
 		var lectern = interactiveElements.lectern;
 		
-		// Draw flash animation for lectern
-		ctx.save();
-		ctx.translate(-camera.x, -camera.y);
-		ctx.scale(indoorZoom, indoorZoom);
-		ctx.globalAlpha = lectern.flashAlpha * 0.8;
-		ctx.fillStyle = "rgba(255, 0, 0, 0.8)";
-		ctx.beginPath();
-		ctx.arc(lectern.x + lectern.width / 2, lectern.y + lectern.height / 2, 2, 0, Math.PI * 2);
-		ctx.fill();
-		ctx.restore();
-		ctx.globalAlpha = 1;
-		
 		// Draw interact hint
 		if (lectern.showHint) {
 			drawInteractionHint("互动", "打开留言簿");
 		}
 		var organ = interactiveElements.organ;
-		ctx.save();
-		ctx.translate(-camera.x, -camera.y);
-		ctx.scale(indoorZoom, indoorZoom);
-		ctx.globalAlpha = organ.flashAlpha * 0.8;
-		ctx.fillStyle = "rgba(255, 0, 0, 0.8)";
-		ctx.beginPath();
-		ctx.arc(organ.pointX, organ.pointY, 2, 0, Math.PI * 2);
-		ctx.fill();
-		ctx.restore();
-		ctx.globalAlpha = 1;
 		if (organ.showHint) {
 			drawInteractionHint("音乐", "试听 / 开关 BGM");
 		}
@@ -2649,6 +2654,12 @@ function drawInteractionHint(label, action) {
 	ctx.font = "10px " + UI_THEME.font;
 	ctx.fillText(action, x + 52, y + 28);
 	ctx.restore();
+}
+
+function isPointInInteractionHint(x, y) {
+	var hintX = 20;
+	var hintY = canvas.height - 58;
+	return x >= hintX && x <= hintX + 228 && y >= hintY && y <= hintY + 42;
 }
 
 function isPointInMusicPlayer(x, y) {
