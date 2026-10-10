@@ -20,15 +20,16 @@ var UI_THEME = {
 	danger: "#ff9a8f",
 	font: "system-ui, -apple-system, Segoe UI, sans-serif"
 };
+var NOTICE_TABS = ["activity", "domestic", "global", "globalTopics"];
 var systemNotice = {
 	visible: false,
 	button: { x: 464, y: 5, width: 42, height: 24 },
 	scroll: 0,
 	tab: "activity",
-	loading: false,
-	error: null,
-	items: { activity: [], global: [], domestic: [] },
-	loaded: { activity: false, global: false, domestic: false }
+	items: { activity: [], domestic: [], global: [], globalTopics: [] },
+	loaded: { activity: false, domestic: false, global: false, globalTopics: false },
+	loading: { activity: false, domestic: false, global: false, globalTopics: false },
+	errors: { activity: null, domestic: null, global: null, globalTopics: null }
 };
 var musicPlayer = { visible: false, cover: null };
 
@@ -79,9 +80,9 @@ function toggleSystemNotice() {
 	if (systemNotice.visible) loadSystemNoticeTab(systemNotice.tab);
 }
 
-function systemNoticeTabIndex() { return ["activity", "global", "domestic"].indexOf(systemNotice.tab); }
+function systemNoticeTabIndex() { return NOTICE_TABS.indexOf(systemNotice.tab); }
 function selectSystemNoticeTab(index) {
-	var tabs = ["activity", "global", "domestic"];
+	var tabs = NOTICE_TABS;
 	if (index < 0 || index >= tabs.length) return;
 	systemNotice.tab = tabs[index];
 	systemNotice.scroll = 0;
@@ -91,59 +92,172 @@ function isPointInSystemNoticeTab(x, y) {
 	return systemNotice.visible && x >= 52 && x <= canvas.width - 52 && y >= 84 && y <= 109;
 }
 systemNotice.tabIndexAtPoint = function (x) {
-	return Math.max(0, Math.min(2, Math.floor((x - 52) / ((canvas.width - 104) / 3))));
+	return Math.max(0, Math.min(NOTICE_TABS.length - 1, Math.floor((x - 52) / ((canvas.width - 104) / NOTICE_TABS.length))));
 };
 function loadSystemNoticeTab(tab) {
-	if (systemNotice.loaded[tab] || systemNotice.loading) return;
-	systemNotice.loading = true;
-	systemNotice.error = null;
+	if (systemNotice.loaded[tab] || systemNotice.loading[tab]) return;
+	systemNotice.loading[tab] = true;
+	systemNotice.errors[tab] = null;
 	fetchSystemNoticeItems(tab)
 		.then(function (items) {
 			systemNotice.items[tab] = items;
 			systemNotice.loaded[tab] = true;
 		})
-		.catch(function (error) { systemNotice.error = error.message || "新闻加载失败"; })
-		.finally(function () { systemNotice.loading = false; });
+		.catch(function (error) {
+			systemNotice.errors[tab] = (error && error.message) || "新闻加载失败";
+			console.warn("[Phantom] news tab '" + tab + "' failed", error);
+		})
+		.finally(function () { systemNotice.loading[tab] = false; });
 }
 
+// Lodestone JSON mirror with permissive CORS (Access-Control-Allow-Origin: *).
+var LODESTONE_NEWS_BASE = "https://lodestonenews.com/news";
+// CN official news API (Shanda). Category codes follow the backend FF14NewsUtils mapping:
+// 8324 维护通知 / 8325 维护完成 / 8326 综合 / 8327 热修复 / 5309 心享俱乐部 /
+// 5310 新闻 / 5311 线上活动 / 5312 周边线下 / 5313 第三方平台活动.
+var SDO_NEWS_BASE = "https://cqnews.web.sdo.com/api/news/newsList?gameCode=ff";
+var DOMESTIC_CATEGORY_CODES = "8324,8325,8326,8327,5309,5310,5311,5312,5313";
+var ACTIVITY_CATEGORY_CODES = "5311";
+// Public CORS relays used only for endpoints that omit browser CORS headers (e.g. the CN news API).
+// Ordered by observed reliability; each failure falls through to the next one.
+var CORS_PROXIES = [
+	function (url) { return "https://api.allorigins.win/raw?url=" + encodeURIComponent(url); },
+	function (url) { return "https://api.codetabs.com/v1/proxy/?quest=" + encodeURIComponent(url); },
+	function (url) { return "https://api.cors.lol/?url=" + encodeURIComponent(url); }
+];
+
 function fetchSystemNoticeItems(tab) {
-	if (tab === "domestic") {
-		var domesticUrl = "https://cqnews.web.sdo.com/api/news/newsList?gameCode=ff&CategoryCode=8324,8325,8326,8327,5309,5310,5311,5312,5313&pageIndex=0&pageSize=10";
-		return fetchExternalText(domesticUrl).then(function (text) {
-			var payload = JSON.parse(text);
-			return (Array.isArray(payload.Data) ? payload.Data : []).map(function (item) {
-				var id = item.Id || "";
-				return { title: item.Title || "", description: item.Summary || "", date: String(item.PublishDate || "").slice(0, 10), linkUrl: item.OutLink || "https://ff.web.sdo.com/web8/index.html#/newstab/newscont/" + id };
+	// "活动" = 国服线上活动公告.
+	if (tab === "activity") return fetchSdoNews(ACTIVITY_CATEGORY_CODES);
+	// "新闻" = 国服全部分类新闻, same scope as backend FF14NewsUtils.
+	if (tab === "domestic") return fetchSdoNews(DOMESTIC_CATEGORY_CODES);
+	// "topics" mirrors backend TOPICS_RSS_URL (topics.xml).
+	if (tab === "globalTopics") {
+		return fetchNewsJson(LODESTONE_NEWS_BASE + "/topics")
+			.then(function (items) {
+				if (!Array.isArray(items) || items.length === 0) throw new Error("topics 获取失败");
+				return items.slice(0, 10).map(normalizeLodestoneItem);
 			});
-		});
 	}
-	var rssUrl = tab === "activity" ? "https://jp.finalfantasyxiv.com/lodestone/news/topics.xml" : "https://jp.finalfantasyxiv.com/lodestone/news/news.xml";
-	return fetchExternalText(rssUrl).then(parseLodestoneNews);
+	// "news" mirrors backend NEWS_RSS_URL (news.xml): notices + updates + maintenance.
+	return Promise.all([
+		fetchNewsJson(LODESTONE_NEWS_BASE + "/notices").catch(function () { return null; }),
+		fetchNewsJson(LODESTONE_NEWS_BASE + "/updates").catch(function () { return null; }),
+		fetchNewsJson(LODESTONE_NEWS_BASE + "/maintenance").catch(function () { return null; })
+	]).then(function (groups) {
+		var merged = Array.prototype.concat.apply([], groups.filter(Array.isArray));
+		if (merged.length === 0) throw new Error("news 获取失败");
+		return merged
+			.filter(function (item) { return item && item.title; })
+			.sort(function (a, b) { return String(b.time || "").localeCompare(String(a.time || "")); })
+			.slice(0, 10)
+			.map(normalizeLodestoneItem);
+	});
+}
+
+function normalizeLodestoneItem(item) {
+	return {
+		title: item.title || "",
+		description: item.description || "",
+		date: String(item.time || "").slice(0, 10),
+		linkUrl: item.url || ""
+	};
+}
+
+function mapSdoNewsItem(item) {
+	var id = item.Id || "";
+	return {
+		title: item.Title || "",
+		description: item.Summary || "",
+		date: String(item.PublishDate || "").slice(0, 10),
+		linkUrl: item.OutLink || "https://ff.web.sdo.com/web8/index.html#/newstab/newscont/" + id
+	};
+}
+
+function buildSdoNewsUrl(categoryCodes) {
+	return SDO_NEWS_BASE + "&CategoryCode=" + encodeURIComponent(categoryCodes) + "&pageIndex=0&pageSize=10";
+}
+
+function fetchSdoNews(categoryCodes) {
+	var url = buildSdoNewsUrl(categoryCodes);
+	// The CN news API has no browser CORS headers but supports JSONP; prefer it (fast, domestic)
+	// and only fall back to public CORS relays when the script injection fails.
+	return fetchJsonp(url, "callback")
+		.then(function (payload) { return (Array.isArray(payload.Data) ? payload.Data : []).map(mapSdoNewsItem); })
+		.catch(function (jsonpError) {
+			return fetchJsonViaCorsProxies(url)
+				.then(function (payload) { return (Array.isArray(payload.Data) ? payload.Data : []).map(mapSdoNewsItem); })
+				.catch(function () { throw jsonpError; });
+		});
+}
+
+// Minimal JSONP loader: the server wraps its JSON in `callbackName({...})`, so no CORS is required.
+function fetchJsonp(url, callbackParam) {
+	var timeoutMs = (gameConfig && gameConfig.requestTimeoutMs) || 8000;
+	return new Promise(function (resolve, reject) {
+		var callbackName = "phantomNewsCb_" + Date.now() + "_" + Math.floor(Math.random() * 1e6);
+		var script = document.createElement("script");
+		var settled = false;
+		var timer = setTimeout(function () { finish(new Error("官方新闻请求超时")); }, timeoutMs);
+		function finish(error, data) {
+			if (settled) return;
+			settled = true;
+			clearTimeout(timer);
+			try { delete window[callbackName]; } catch (e) { window[callbackName] = undefined; }
+			if (script.parentNode) script.parentNode.removeChild(script);
+			if (error) reject(error); else resolve(data);
+		}
+		window[callbackName] = function (data) { finish(null, data); };
+		script.onerror = function () { finish(new Error("官方新闻请求失败")); };
+		var separator = url.indexOf("?") >= 0 ? "&" : "?";
+		script.src = url + separator + (callbackParam || "callback") + "=" + encodeURIComponent(callbackName);
+		document.body.appendChild(script);
+	});
+}
+
+function fetchNewsJson(url) {
+	// One immediate retry covers transient connection resets, then fall back to a CORS relay.
+	return fetchExternalText(url).then(parseJsonText)
+		.catch(function (firstError) {
+			return fetchExternalText(url).then(parseJsonText)
+				.catch(function () { return fetchJsonViaCorsProxies(url).catch(function () { throw firstError; }); });
+		});
+}
+
+function parseJsonText(text) { return JSON.parse(text); }
+
+function fetchJsonViaCorsProxies(url) {
+	var lastError = null;
+	function attempt(index) {
+		if (index >= CORS_PROXIES.length) {
+			return Promise.reject(lastError || new Error("新闻代理暂时不可用"));
+		}
+		return fetchExternalText(CORS_PROXIES[index](url))
+			.then(function (text) {
+				var parsed = JSON.parse(text);
+				// Proxies sometimes answer with an HTML error page carrying HTTP 200; treat it as failure.
+				if (!parsed || typeof parsed !== "object") throw new Error("代理返回内容异常");
+				return parsed;
+			})
+			.catch(function (error) {
+				lastError = error;
+				return attempt(index + 1);
+			});
+	}
+	return attempt(0);
 }
 
 function fetchExternalText(url) {
-	return fetch(url).then(function (response) {
-		if (!response.ok) throw new Error("外部新闻请求失败");
-		return response.text();
-	});
+	var controller = new AbortController();
+	var timeoutMs = (gameConfig && gameConfig.requestTimeoutMs) || 8000;
+	var timer = setTimeout(function () { controller.abort(); }, timeoutMs);
+	return fetch(url, { signal: controller.signal })
+		.then(function (response) {
+			if (!response.ok) throw new Error("外部新闻请求失败 (" + response.status + ")");
+			return response.text();
+		})
+		.finally(function () { clearTimeout(timer); });
 }
-
-function parseLodestoneNews(xmlText) {
-	var documentNode = new DOMParser().parseFromString(xmlText, "application/xml");
-	var entries = Array.prototype.slice.call(documentNode.getElementsByTagName("entry"));
-	return entries.slice(0, 10).map(function (entry) {
-		var link = Array.prototype.slice.call(entry.getElementsByTagName("link")).find(function (node) { return node.getAttribute("rel") === "alternate"; });
-		var summary = entry.getElementsByTagName("summary")[0];
-		return {
-			title: textFromNode(entry.getElementsByTagName("title")[0]),
-			description: summary ? textFromNode(summary).replace(/<[^>]*>/g, "").trim() : "",
-			date: textFromNode(entry.getElementsByTagName("published")[0]).slice(0, 10),
-			linkUrl: link ? link.getAttribute("href") : ""
-		};
-	});
-}
-
-function textFromNode(node) { return node ? String(node.textContent || "").trim() : ""; }
 
 // Debug mode keyboard toggle (F12 key)
 addEventListener("keydown", function (e) {
@@ -2987,13 +3101,13 @@ function drawSystemNotice() {
 	ctx.font = "bold 16px system-ui";
 	ctx.textAlign = "left";
 	ctx.textBaseline = "top";
-	ctx.fillText("世界情报", panelX + 18, panelY + 16);
+	ctx.fillText("通知提示", panelX + 18, panelY + 16);
 	ctx.fillStyle = "#b9a995";
 	ctx.font = "11px system-ui";
 	ctx.textAlign = "right";
 	ctx.fillText("P / ESC 关闭", panelX + panelWidth - 18, panelY + 20);
 
-	var tabs = ["当前活动", "国际服新闻", "国服新闻"];
+	var tabs = ["活动", "新闻", "news", "topics"];
 	var activeTab = systemNoticeTabIndex();
 	var tabWidth = (panelWidth - 20) / tabs.length;
 	ctx.font = "bold 11px system-ui";
@@ -3014,7 +3128,15 @@ function drawSystemNotice() {
 	ctx.font = "13px system-ui";
 	if (messages.length === 0) {
 		ctx.fillStyle = "#b9a995";
-		ctx.fillText(systemNotice.loading ? "正在加载新闻..." : (systemNotice.error || "暂无新闻"), panelX + 18, panelY + 92);
+		var emptyText = systemNotice.loading[systemNotice.tab]
+			? "正在加载新闻..."
+			: (systemNotice.errors[systemNotice.tab] || "暂无新闻");
+		ctx.fillText(emptyText, panelX + 18, panelY + 92);
+		if (systemNotice.errors[systemNotice.tab]) {
+			ctx.textAlign = "right";
+			ctx.fillText("点击当前标签重试", panelX + panelWidth - 18, panelY + 92);
+			ctx.textAlign = "left";
+		}
 	} else {
 		var visibleMessages = messages.slice(systemNotice.scroll, systemNotice.scroll + visibleCount);
 		visibleMessages.forEach(function (message, index) {
