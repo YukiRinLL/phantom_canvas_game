@@ -23,7 +23,12 @@ var UI_THEME = {
 var systemNotice = {
 	visible: false,
 	button: { x: 464, y: 5, width: 42, height: 24 },
-	scroll: 0
+	scroll: 0,
+	tab: "activity",
+	loading: false,
+	error: null,
+	items: { activity: [], global: [], domestic: [] },
+	loaded: { activity: false, global: false, domestic: false }
 };
 var musicPlayer = { visible: false, cover: null };
 
@@ -36,6 +41,10 @@ canvas.addEventListener("click", function (event) {
 	var button = systemNotice.button;
 	if (x >= button.x && x <= button.x + button.width && y >= button.y && y <= button.y + button.height) {
 		toggleSystemNotice();
+		return;
+	}
+	if (systemNotice.visible && isPointInSystemNoticeTab(x, y)) {
+		selectSystemNoticeTab(systemNotice.tabIndexAtPoint(x));
 		return;
 	}
 	if (currentScene === "indoor" && isPointInInteractionHint(x, y) &&
@@ -67,7 +76,74 @@ function toggleSystemNotice() {
 	if (messageBook && messageBook.visible) return;
 	systemNotice.visible = !systemNotice.visible;
 	systemNotice.scroll = 0;
+	if (systemNotice.visible) loadSystemNoticeTab(systemNotice.tab);
 }
+
+function systemNoticeTabIndex() { return ["activity", "global", "domestic"].indexOf(systemNotice.tab); }
+function selectSystemNoticeTab(index) {
+	var tabs = ["activity", "global", "domestic"];
+	if (index < 0 || index >= tabs.length) return;
+	systemNotice.tab = tabs[index];
+	systemNotice.scroll = 0;
+	loadSystemNoticeTab(systemNotice.tab);
+}
+function isPointInSystemNoticeTab(x, y) {
+	return systemNotice.visible && x >= 52 && x <= canvas.width - 52 && y >= 84 && y <= 109;
+}
+systemNotice.tabIndexAtPoint = function (x) {
+	return Math.max(0, Math.min(2, Math.floor((x - 52) / ((canvas.width - 104) / 3))));
+};
+function loadSystemNoticeTab(tab) {
+	if (systemNotice.loaded[tab] || systemNotice.loading) return;
+	systemNotice.loading = true;
+	systemNotice.error = null;
+	fetchSystemNoticeItems(tab)
+		.then(function (items) {
+			systemNotice.items[tab] = items;
+			systemNotice.loaded[tab] = true;
+		})
+		.catch(function (error) { systemNotice.error = error.message || "新闻加载失败"; })
+		.finally(function () { systemNotice.loading = false; });
+}
+
+function fetchSystemNoticeItems(tab) {
+	if (tab === "domestic") {
+		var domesticUrl = "https://cqnews.web.sdo.com/api/news/newsList?gameCode=ff&CategoryCode=8324,8325,8326,8327,5309,5310,5311,5312,5313&pageIndex=0&pageSize=10";
+		return fetchExternalText(domesticUrl).then(function (text) {
+			var payload = JSON.parse(text);
+			return (Array.isArray(payload.Data) ? payload.Data : []).map(function (item) {
+				var id = item.Id || "";
+				return { title: item.Title || "", description: item.Summary || "", date: String(item.PublishDate || "").slice(0, 10), linkUrl: item.OutLink || "https://ff.web.sdo.com/web8/index.html#/newstab/newscont/" + id };
+			});
+		});
+	}
+	var rssUrl = tab === "activity" ? "https://jp.finalfantasyxiv.com/lodestone/news/topics.xml" : "https://jp.finalfantasyxiv.com/lodestone/news/news.xml";
+	return fetchExternalText(rssUrl).then(parseLodestoneNews);
+}
+
+function fetchExternalText(url) {
+	return fetch(url).then(function (response) {
+		if (!response.ok) throw new Error("外部新闻请求失败");
+		return response.text();
+	});
+}
+
+function parseLodestoneNews(xmlText) {
+	var documentNode = new DOMParser().parseFromString(xmlText, "application/xml");
+	var entries = Array.prototype.slice.call(documentNode.getElementsByTagName("entry"));
+	return entries.slice(0, 10).map(function (entry) {
+		var link = Array.prototype.slice.call(entry.getElementsByTagName("link")).find(function (node) { return node.getAttribute("rel") === "alternate"; });
+		var summary = entry.getElementsByTagName("summary")[0];
+		return {
+			title: textFromNode(entry.getElementsByTagName("title")[0]),
+			description: summary ? textFromNode(summary).replace(/<[^>]*>/g, "").trim() : "",
+			date: textFromNode(entry.getElementsByTagName("published")[0]).slice(0, 10),
+			linkUrl: link ? link.getAttribute("href") : ""
+		};
+	});
+}
+
+function textFromNode(node) { return node ? String(node.textContent || "").trim() : ""; }
 
 // Debug mode keyboard toggle (F12 key)
 addEventListener("keydown", function (e) {
@@ -1933,6 +2009,12 @@ var update = function (modifier) {
 			systemNotice.visible = false;
 			systemNotice.scroll = 0;
 			delete keysDown[27];
+		} else if (keysDown[37]) {
+			selectSystemNoticeTab(systemNoticeTabIndex() - 1);
+			delete keysDown[37];
+		} else if (keysDown[39]) {
+			selectSystemNoticeTab(systemNoticeTabIndex() + 1);
+			delete keysDown[39];
 		} else if (keysDown[38]) {
 			systemNotice.scroll = Math.max(0, systemNotice.scroll - 1);
 			delete keysDown[38];
@@ -2905,13 +2987,25 @@ function drawSystemNotice() {
 	ctx.font = "bold 16px system-ui";
 	ctx.textAlign = "left";
 	ctx.textBaseline = "top";
-	ctx.fillText("通知提示", panelX + 18, panelY + 16);
+	ctx.fillText("世界情报", panelX + 18, panelY + 16);
 	ctx.fillStyle = "#b9a995";
 	ctx.font = "11px system-ui";
 	ctx.textAlign = "right";
 	ctx.fillText("P / ESC 关闭", panelX + panelWidth - 18, panelY + 20);
 
-	var messages = hero.notificationHistory;
+	var tabs = ["当前活动", "国际服新闻", "国服新闻"];
+	var activeTab = systemNoticeTabIndex();
+	var tabWidth = (panelWidth - 20) / tabs.length;
+	ctx.font = "bold 11px system-ui";
+	tabs.forEach(function (tab, index) {
+		var tabX = panelX + 10 + index * tabWidth;
+		ctx.fillStyle = index === activeTab ? "#f2c46d" : "rgba(70, 56, 44, 0.8)";
+		ctx.fillRect(tabX, panelY + 42, tabWidth - 3, 25);
+		ctx.fillStyle = index === activeTab ? "#4a2911" : "#d2c2ae";
+		ctx.textAlign = "center";
+		ctx.fillText(tab, tabX + (tabWidth - 3) / 2, panelY + 55);
+	});
+	var messages = systemNotice.items[systemNotice.tab] || [];
 	var visibleCount = 5;
 	var maxScroll = Math.max(0, messages.length - visibleCount);
 	systemNotice.scroll = Math.min(systemNotice.scroll, maxScroll);
@@ -2920,12 +3014,13 @@ function drawSystemNotice() {
 	ctx.font = "13px system-ui";
 	if (messages.length === 0) {
 		ctx.fillStyle = "#b9a995";
-		ctx.fillText("暂无新的主角消息", panelX + 18, panelY + 70);
+		ctx.fillText(systemNotice.loading ? "正在加载新闻..." : (systemNotice.error || "暂无新闻"), panelX + 18, panelY + 92);
 	} else {
 		var visibleMessages = messages.slice(systemNotice.scroll, systemNotice.scroll + visibleCount);
 		visibleMessages.forEach(function (message, index) {
-			var lines = wrapText(message.content, panelWidth - 36);
-			var y = panelY + 64 + index * 26;
+			var title = message.title || message.content || "";
+			var lines = wrapText(title, panelWidth - 36);
+			var y = panelY + 92 + index * 26;
 			ctx.fillStyle = index === visibleMessages.length - 1 && systemNotice.scroll === maxScroll ? "#fff3d1" : "#d2c2ae";
 			ctx.fillText(truncateText(lines[0] || "", panelWidth - 36), panelX + 18, y);
 			if (lines.length > 1) ctx.fillText("...", panelX + panelWidth - 36, y + 13);
