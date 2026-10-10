@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Phantom Transparent Background Tool</title>
+  <style>
+    :root { color-scheme: dark; font: 14px system-ui, sans-serif; background: #17120f; color: #f7e7c1; }
+    * { box-sizing: border-box; }
+    body { max-width: 1000px; margin: 0 auto; padding: 24px; }
+    h1 { margin: 0 0 8px; color: #f2c46d; }
+    p { color: #b9a995; line-height: 1.6; }
+    .toolbar { display: grid; grid-template-columns: minmax(220px, 1fr) repeat(3, minmax(130px, 1fr)); gap: 12px; align-items: end; margin: 18px 0; }
+    label { display: grid; gap: 5px; color: #d9c5a0; font-size: 12px; }
+    input, button { font: inherit; }
+    input[type="file"], input[type="number"] { width: 100%; padding: 8px; border: 1px solid #6f5435; border-radius: 5px; background: #211a16; color: #fff3d1; }
+    button { padding: 9px 12px; border: 1px solid #f2c46d; border-radius: 5px; background: #3b2b20; color: #fff3d1; cursor: pointer; }
+    button:disabled { cursor: not-allowed; opacity: .45; }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+    .preview-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .preview-card { min-width: 0; padding: 12px; border: 1px solid #6f5435; border-radius: 6px; background: #211a16; }
+    .preview-card strong { display: block; margin-bottom: 8px; color: #f2c46d; }
+    canvas { display: block; width: 100%; max-height: 62vh; object-fit: contain; image-rendering: pixelated; border: 1px solid #6f5435; background: repeating-conic-gradient(#332820 0 25%, #211a16 0 50%) 0 / 16px 16px; }
+    #original { background: #f7f7f7; }
+    #info { min-height: 24px; margin-top: 14px; color: #b9a995; white-space: pre-wrap; }
+    code { color: #f2c46d; }
+    @media (max-width: 700px) { body { padding: 14px; } .toolbar { grid-template-columns: 1fr 1fr; } .toolbar label:first-child { grid-column: 1 / -1; } .preview-grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <h1>透明背景处理器</h1>
+  <p>从图片边缘开始识别浅色背景，只处理与外部连通的近白色区域。角色内部的白色不会被全局删除，适合处理像素角色 sprite sheet。</p>
+  <div class="toolbar">
+    <label>选择图片<input id="file" type="file" accept="image/png,image/webp,image/*"></label>
+    <label>背景亮度下限<input id="brightness" type="number" min="0" max="255" value="220"></label>
+    <label>最大色彩差异<input id="chroma" type="number" min="0" max="255" value="40"></label>
+    <label>边缘保留 Alpha<input id="edgeAlpha" type="number" min="0" max="255" value="96"></label>
+  </div>
+  <div class="actions">
+    <button id="process" type="button" disabled>处理预览</button>
+    <button id="download" type="button" disabled>下载透明 PNG</button>
+    <button id="reset" type="button" disabled>恢复原图</button>
+  </div>
+  <div class="preview-grid">
+    <div class="preview-card"><strong>原图</strong><canvas id="original" width="1" height="1"></canvas></div>
+    <div class="preview-card"><strong>处理结果（棋盘格表示透明）</strong><canvas id="result" width="1" height="1"></canvas></div>
+  </div>
+  <div id="info">尚未选择图片</div>
+  <script>
+    "use strict";
+    var file = document.getElementById("file");
+    var brightnessInput = document.getElementById("brightness");
+    var chromaInput = document.getElementById("chroma");
+    var edgeAlphaInput = document.getElementById("edgeAlpha");
+    var processButton = document.getElementById("process");
+    var downloadButton = document.getElementById("download");
+    var resetButton = document.getElementById("reset");
+    var originalCanvas = document.getElementById("original");
+    var resultCanvas = document.getElementById("result");
+    var info = document.getElementById("info");
+    var originalData = null;
+    var resultData = null;
+
+    function drawCanvas(canvas, imageData) {
+      canvas.width = imageData.width;
+      canvas.height = imageData.height;
+      canvas.getContext("2d").putImageData(imageData, 0, 0);
+    }
+
+    function isCandidate(data, offset, brightness, chroma) {
+      var alpha = data[offset + 3];
+      var red = data[offset];
+      var green = data[offset + 1];
+      var blue = data[offset + 2];
+      var maximum = Math.max(red, green, blue);
+      var minimum = Math.min(red, green, blue);
+      return alpha === 0 || (alpha > 0 && maximum >= brightness && maximum - minimum <= chroma);
+    }
+
+    function processImage() {
+      if (!originalData) return;
+      var width = originalData.width;
+      var height = originalData.height;
+      var output = new Uint8ClampedArray(originalData.data);
+      var visited = new Uint8Array(width * height);
+      var queue = [];
+      var brightness = Math.max(0, Math.min(255, Number(brightnessInput.value) || 220));
+      var chroma = Math.max(0, Math.min(255, Number(chromaInput.value) || 40));
+      var edgeAlpha = Math.max(0, Math.min(255, Number(edgeAlphaInput.value) || 96));
+
+      function enqueue(x, y) { if (x >= 0 && x < width && y >= 0 && y < height) queue.push(y * width + x); }
+      for (var x = 0; x < width; x++) { enqueue(x, 0); enqueue(x, height - 1); }
+      for (var y = 1; y < height - 1; y++) { enqueue(0, y); enqueue(width - 1, y); }
+      while (queue.length) {
+        var index = queue.pop();
+        if (visited[index]) continue;
+        visited[index] = 1;
+        var offset = index * 4;
+        if (!isCandidate(output, offset, brightness, chroma)) continue;
+        var currentBrightness = (output[offset] + output[offset + 1] + output[offset + 2]) / 3;
+        output[offset + 3] = currentBrightness >= 245 ? 0 : Math.max(0, Math.min(edgeAlpha, Math.round((255 - currentBrightness) * 2.5)));
+        var pointX = index % width;
+        var pointY = Math.floor(index / width);
+        enqueue(pointX - 1, pointY); enqueue(pointX + 1, pointY); enqueue(pointX, pointY - 1); enqueue(pointX, pointY + 1);
+      }
+      resultData = new ImageData(output, width, height);
+      drawCanvas(resultCanvas, resultData);
+      downloadButton.disabled = false;
+      resetButton.disabled = false;
+      info.textContent = "处理完成。参数：亮度 >= " + brightness + "，色彩差异 <= " + chroma + "，边缘最大 Alpha = " + edgeAlpha + "。";
+    }
+
+    file.addEventListener("change", function () {
+      var selected = file.files[0];
+      if (!selected) return;
+      var image = new Image();
+      image.onload = function () {
+        originalCanvas.width = image.naturalWidth;
+        originalCanvas.height = image.naturalHeight;
+        var context = originalCanvas.getContext("2d");
+        context.clearRect(0, 0, originalCanvas.width, originalCanvas.height);
+        context.drawImage(image, 0, 0);
+        originalData = context.getImageData(0, 0, originalCanvas.width, originalCanvas.height);
+        drawCanvas(resultCanvas, originalData);
+        resultData = originalData;
+        processButton.disabled = false;
+        downloadButton.disabled = true;
+        resetButton.disabled = false;
+        info.textContent = "原图 " + image.naturalWidth + " × " + image.naturalHeight + "。可直接处理或调整参数后处理。";
+        URL.revokeObjectURL(image.src);
+      };
+      image.src = URL.createObjectURL(selected);
+    });
+    processButton.addEventListener("click", processImage);
+    resetButton.addEventListener("click", function () { if (!originalData) return; resultData = originalData; drawCanvas(resultCanvas, originalData); downloadButton.disabled = true; info.textContent = "已恢复原图。"; });
+    downloadButton.addEventListener("click", function () { if (!resultData) return; var link = document.createElement("a"); link.download = "transparent-sprite.png"; link.href = resultCanvas.toDataURL("image/png"); link.click(); });
+  </script>
+</body>
+</html>

@@ -33,6 +33,7 @@ var systemNotice = {
 	errors: { activity: null, domestic: null, global: null, globalTopics: null }
 };
 var musicPlayer = { visible: false, cover: null };
+var mogWindow = { visible: false, frame: 0 };
 
 canvas.addEventListener("click", function (event) {
 	var bounds = canvas.getBoundingClientRect();
@@ -49,6 +50,10 @@ canvas.addEventListener("click", function (event) {
 		selectSystemNoticeTab(systemNotice.tabIndexAtPoint(x));
 		return;
 	}
+	if (mogWindow.visible && isPointInMogWindow(x, y)) {
+		mogWindow.visible = false;
+		return;
+	}
 	if (systemNotice.visible && isPointInSystemNoticeItem(x, y)) {
 		openSystemNoticeItem(systemNotice.itemIndexAtPoint(y));
 		return;
@@ -56,6 +61,10 @@ canvas.addEventListener("click", function (event) {
 	if (currentScene === "indoor" && isPointInInteractionHint(x, y) &&
 		(interactiveElements.lectern.interactable || interactiveElements.organ.interactable)) {
 		// Use the same input path as the keyboard F key so every interaction stays consistent.
+		keysDown[70] = true;
+		return;
+	}
+	if (currentScene === "far" && interactiveElements.mog.interactable && isPointInMogHint(x, y)) {
 		keysDown[70] = true;
 		return;
 	}
@@ -378,6 +387,13 @@ var resources = {
 			paths: ["audio/sonnet-phantom-cover.png"],
 			currentPathIndex: 0,
 			name: "music cover"
+		},
+		mogSprite: {
+			ready: false,
+			image: null,
+			paths: ["images/mog-sprite-sheet.png"],
+			currentPathIndex: 0,
+			name: "mog sprite sheet"
 		}
 	},
 	
@@ -756,6 +772,16 @@ var interactiveElements = {
 			pointY: 620,
 			flashTimer: 0,
 			flashAlpha: 0,
+			interactable: false,
+			showHint: false
+		},
+		mog: {
+			x: 432,
+			y: 390,
+			width: 32,
+			height: 36,
+			flashTimer: 0,
+			frame: 0,
 			interactable: false,
 			showHint: false
 		}
@@ -2064,7 +2090,22 @@ var update = function (modifier) {
 			}
 			delete keysDown[70];
 		}
+	} else if (currentScene === "far") {
+		var mog = interactiveElements.mog;
+		mog.flashTimer += modifier;
+		mog.frame = Math.floor(mog.flashTimer * 6) % 5;
+		var mogCenterX = mog.x + mog.width / 2;
+		var mogCenterY = mog.y + mog.height / 2;
+		var mogDistance = Math.sqrt(Math.pow(hero.x + 26 - mogCenterX, 2) + Math.pow(hero.y + 30 - mogCenterY, 2));
+		mog.interactable = mogDistance < 48;
+		mog.showHint = mog.interactable;
+		if (mog.interactable && keysDown[70]) {
+			mogWindow.visible = true;
+			mogWindow.frame = 0;
+			delete keysDown[70];
+		}
 	}
+	if (mogWindow.visible) mogWindow.frame = (mogWindow.frame + modifier * 6) % 13;
 
 	// Handle message book navigation
 	if (musicPlayer.visible && keysDown[27]) {
@@ -2076,6 +2117,18 @@ var update = function (modifier) {
 			PhantomAudioSystem.toggle().then(function () {});
 		} catch (error) { reportStatus("音乐播放器不可用：" + error.message, true); }
 		delete keysDown[32];
+	}
+	if (mogWindow.visible && keysDown[27]) {
+		mogWindow.visible = false;
+		delete keysDown[27];
+	} else if (mogWindow.visible && (keysDown[37] || keysDown[40])) {
+		mogWindow.frame = (Math.floor(mogWindow.frame) + 12) % 13;
+		delete keysDown[37];
+		delete keysDown[40];
+	} else if (mogWindow.visible && (keysDown[39] || keysDown[38])) {
+		mogWindow.frame = (Math.floor(mogWindow.frame) + 1) % 13;
+		delete keysDown[39];
+		delete keysDown[38];
 	}
 	if (messageBook.visible) {
 		if (messageBook.detailVisible) {
@@ -2421,6 +2474,7 @@ var render = function () {
 			ctx.globalAlpha = 1;
 		}
 	}
+	if (currentScene === "far") drawMogSprite(interactiveElements.mog.x, interactiveElements.mog.y, interactiveElements.mog.frame, 0.66);
 
 	// Draw far foreground blocks (only in far scene)
 	if (currentScene === "far" && bgFarBlockReady) {
@@ -2502,6 +2556,8 @@ var render = function () {
 		if (organ.showHint) {
 			drawInteractionHint("音乐", "试听 / 开关 BGM");
 		}
+	} else if (currentScene === "far" && interactiveElements.mog.showHint) {
+		drawInteractionHint("莫古力", "按 F 查看动态");
 	}
 
 	// Draw message book
@@ -2700,6 +2756,7 @@ var render = function () {
 		drawPixelTransition();
 	}
 	drawMusicPlayer();
+	drawMogWindow();
 
 	// Debug is the final screen layer: it must remain visible above foregrounds
 	// and in-game panels while never being transformed by the camera.
@@ -2879,6 +2936,76 @@ function drawInteractionHint(label, action) {
 	ctx.font = "10px " + UI_THEME.font;
 	ctx.fillText(action, x + 52, y + 28);
 	ctx.restore();
+}
+
+function getMogSourceRect(frame, small) {
+	var largeFrames = [
+		{ x: 139, y: 41, width: 50, height: 70 }, { x: 235, y: 44, width: 47, height: 67 },
+		{ x: 332, y: 41, width: 49, height: 70 }, { x: 427, y: 47, width: 50, height: 64 },
+		{ x: 524, y: 41, width: 48, height: 64 }, { x: 607, y: 67, width: 73, height: 44 },
+		{ x: 140, y: 133, width: 50, height: 74 }, { x: 236, y: 133, width: 50, height: 74 },
+		{ x: 332, y: 137, width: 50, height: 70 }, { x: 428, y: 140, width: 46, height: 67 },
+		{ x: 524, y: 140, width: 50, height: 67 }, { x: 620, y: 140, width: 47, height: 67 },
+		{ x: 140, y: 232, width: 50, height: 67 }
+	];
+	var smallFrames = [
+		{ x: 248, y: 241, width: 31, height: 38 }, { x: 342, y: 241, width: 33, height: 38 },
+		{ x: 438, y: 241, width: 33, height: 38 }, { x: 536, y: 247, width: 31, height: 31 },
+		{ x: 632, y: 241, width: 35, height: 37 }
+	];
+	return (small ? smallFrames : largeFrames)[frame % (small ? smallFrames.length : largeFrames.length)];
+}
+
+function drawMogSprite(x, y, frame, scale) {
+	var resource = resources.images.mogSprite;
+	if (!resource || !resource.ready) return;
+	var source = getMogSourceRect(frame, true);
+	ctx.imageSmoothingEnabled = false;
+	var displayWidth = 48 * scale;
+	var displayHeight = displayWidth * source.height / source.width;
+	ctx.drawImage(resource.image, source.x, source.y, source.width, source.height, x, y, displayWidth, displayHeight);
+}
+
+function drawMogWindow() {
+	if (!mogWindow.visible) return;
+	var panelX = 54, panelY = 48, panelWidth = canvas.width - 108, panelHeight = 300;
+	ctx.fillStyle = "rgba(8, 6, 7, 0.78)";
+	ctx.fillRect(0, 0, canvas.width, canvas.height);
+	drawRoundedPanel(panelX, panelY, panelWidth, panelHeight, "#fffdf7", "#f2c46d");
+	ctx.fillStyle = "#5d3a1a";
+	ctx.font = "bold 16px " + UI_THEME.font;
+	ctx.textAlign = "center";
+	ctx.textBaseline = "middle";
+	ctx.fillText("莫古力(FF6)", canvas.width / 2, panelY + 24);
+	ctx.fillStyle = "#765e4a";
+	ctx.font = "10px " + UI_THEME.font;
+	ctx.fillText("这里有一只莫古力", canvas.width / 2, panelY + 40);
+	var source = getMogSourceRect(Math.floor(mogWindow.frame) % 13, false);
+	var resource = resources.images.mogSprite;
+	var imageBoxX = panelX + 28;
+	var imageBoxY = panelY + 52;
+	var imageBoxWidth = panelWidth - 56;
+	var imageBoxHeight = 198;
+	if (resource && resource.ready) {
+		ctx.imageSmoothingEnabled = false;
+		ctx.fillStyle = "rgba(255, 255, 255, 0.96)";
+		ctx.fillRect(imageBoxX, imageBoxY, imageBoxWidth, imageBoxHeight);
+		// Keep one pixel scale for every pose; fitting each bounding box separately
+		// makes the wide sleeping pose look stretched compared with the others.
+		var scale = 2.5;
+		if (source.width * scale > imageBoxWidth || source.height * scale > imageBoxHeight) {
+			scale = Math.min(imageBoxWidth / source.width, imageBoxHeight / source.height);
+		}
+		var displayWidth = source.width * scale;
+		var displayHeight = source.height * scale;
+		ctx.drawImage(resource.image, source.x, source.y, source.width, source.height,
+			imageBoxX + (imageBoxWidth - displayWidth) / 2,
+			imageBoxY + (imageBoxHeight - displayHeight) / 2,
+			displayWidth, displayHeight);
+	}
+	ctx.fillStyle = "#765e4a";
+	ctx.font = "11px " + UI_THEME.font;
+	ctx.fillText("←→ / ↑↓ 查看动作 · ESC 关闭", canvas.width / 2, panelY + panelHeight - 18);
 }
 
 function isPointInInteractionHint(x, y) {
@@ -3231,6 +3358,14 @@ function drawSystemNotice() {
 	ctx.textAlign = "left";
 	ctx.textBaseline = "middle";
 	ctx.fillText(messages.length > visibleCount ? "←→ 切换 · ↑↓ 滚动 · ESC 关闭" : "←→ 切换 · ESC 关闭", panelX + 18, footerY);
+}
+
+function isPointInMogHint(x, y) {
+	return x >= 20 && x <= 248 && y >= canvas.height - 58 && y <= canvas.height - 16;
+}
+
+function isPointInMogWindow(x, y) {
+	return x >= 54 && x <= canvas.width - 54 && y >= 48 && y <= 348;
 }
 
 function drawMessageDetail(message) {
