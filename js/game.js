@@ -3222,22 +3222,33 @@ function drawChocoboRace() {
 	var panelX = 12, panelY = 12, panelWidth = canvas.width - 24, panelHeight = canvas.height - 24;
 	ctx.fillStyle = "#8ed0dc";
 	ctx.fillRect(0, 0, canvas.width, canvas.height);
+	ctx.save();
+	ctx.translate(0, 64);
 	drawRaceBackground();
-	ctx.fillStyle = "rgba(25, 16, 12, 0.78)";
-	ctx.fillRect(0, 0, canvas.width, 54);
+	ctx.restore();
+	drawRoundedPanel(8, 6, canvas.width - 16, 54, "rgba(25, 16, 12, 0.96)", UI_THEME.border);
+	ctx.fillStyle = "rgba(242, 196, 109, 0.12)";
+	ctx.fillRect(12, 47, canvas.width - 24, 1);
 	ctx.textAlign = "center";
 	ctx.textBaseline = "middle";
 	ctx.fillStyle = UI_THEME.text;
 	ctx.font = "bold 16px " + UI_THEME.font;
-	ctx.fillText("陆行鸟竞赛", canvas.width / 2, panelY + 23);
+	ctx.fillText("CHOCOBO DERBY", canvas.width / 2, 19);
 	ctx.fillStyle = UI_THEME.muted;
 	ctx.font = "10px " + UI_THEME.font;
-	ctx.fillText(chocoboRace.phase === "ready" ? "准备起跑" : (chocoboRace.finished ? "比赛结束 · 最终排名" : "自动比赛中 · 请观赛"), canvas.width / 2, panelY + 41);
+	ctx.fillText(chocoboRace.phase === "ready" ? "GET READY" : (chocoboRace.finished ? "RACE COMPLETE" : "AUTOMATIC RACE · WATCH"), canvas.width / 2, 36);
+	ctx.textAlign = "right";
+	ctx.fillStyle = UI_THEME.accent;
+	ctx.font = "bold 9px " + UI_THEME.font;
+	ctx.fillText(chocoboRace.phase === "ready" ? "READY" : (chocoboRace.finished ? "RESULT" : "LIVE"), canvas.width - 24, 19);
 
 	var sheet = resources.images.chocoboRaceSheet;
 	// The dirt course begins at y=192; keep every lane inside that surface.
+	// Reserve the upper 64px for the race HUD; shift the whole course together.
+	ctx.save();
+	ctx.translate(0, 64);
 	var trackX = 0, trackWidth = canvas.width, laneTop = 200, laneHeight = 27;
-	var names = ["黄", "白", "粉", "蓝", "绿", "黑", "金", "棕"];
+	var names = ["Yellow", "White", "Pink", "Blue", "Green", "Black", "Gold", "Brown"];
 	var renderOrder = chocoboRace.tracers.map(function (racer, index) {
 		return { index: index };
 	}).sort(function (left, right) {
@@ -3297,6 +3308,7 @@ function drawChocoboRace() {
 		ctx.fillStyle = "#70462a";
 		ctx.fillRect(finishX - 12, laneTop + 7 * laneHeight + 20, 66, 5);
 	}
+	ctx.restore();
 	if (chocoboRace.finished) {
 		drawChocoboResults(sheet, names, panelX, panelY, panelWidth, panelHeight);
 	}
@@ -3309,15 +3321,29 @@ function drawChocoboRace() {
 	}
 	ctx.fillStyle = UI_THEME.muted;
 	ctx.font = "10px " + UI_THEME.font;
-	ctx.fillText("ESC 或点击右下角关闭", canvas.width / 2, canvas.height - 12);
+	drawRaceFooter("ESC 关闭");
+}
+
+function drawRaceFooter(text) {
+	var width = 120;
+	var x = canvas.width - width - 12;
+	var y = canvas.height - 31;
+	drawRoundedPanel(x, y, width, 20, "rgba(25, 18, 14, 0.9)", "rgba(242, 196, 109, 0.72)");
+	ctx.fillStyle = UI_THEME.muted;
+	ctx.font = "10px " + UI_THEME.font;
+	ctx.textAlign = "center";
+	ctx.textBaseline = "middle";
+	ctx.fillText(text, x + width / 2, y + 10);
 }
 
 function drawChocoboResults(sheet, names, panelX, panelY, panelWidth, panelHeight) {
-	ctx.fillStyle = "rgba(21, 15, 17, 0.82)";
-	ctx.fillRect(panelX + 8, panelY + 58, panelWidth - 16, panelHeight - 82);
+	drawRoundedPanel(panelX + 8, panelY + 58, panelWidth - 16, panelHeight - 82, "rgba(21, 15, 17, 0.92)", UI_THEME.border);
+	ctx.fillStyle = "rgba(242, 196, 109, 0.1)";
+	ctx.fillRect(panelX + 20, panelY + 92, panelWidth - 40, 1);
 	ctx.textAlign = "center";
 	ctx.fillStyle = UI_THEME.accent;
 	ctx.font = "bold 14px " + UI_THEME.font;
+	ctx.fillText("RACE RESULTS", canvas.width / 2, panelY + 78);
 	var podium = [
 		{ rank: 1, x: canvas.width / 2, top: panelY + 132, width: 72, height: 82, color: "#e7b84e" },
 		{ rank: 2, x: canvas.width / 2 - 76, top: panelY + 150, width: 66, height: 64, color: "#b9c5d0" },
@@ -3339,7 +3365,7 @@ function drawChocoboResults(sheet, names, panelX, panelY, panelWidth, panelHeigh
 		}
 		ctx.fillStyle = UI_THEME.text;
 		ctx.font = "10px " + UI_THEME.font;
-		ctx.fillText(names[racerIndex] + "色", place.x, place.top + place.height + 13);
+		ctx.fillText(names[racerIndex], place.x, place.top + place.height + 13);
 	});
 	ctx.textAlign = "left";
 	ctx.font = "11px " + UI_THEME.font;
@@ -3347,7 +3373,10 @@ function drawChocoboResults(sheet, names, panelX, panelY, panelWidth, panelHeigh
 	chocoboRace.ranking.forEach(function (racerIndex, rank) {
 		ctx.fillStyle = rank < 3 ? UI_THEME.accent : UI_THEME.muted;
 		var racerTime = chocoboRace.tracers[racerIndex].finishTime;
-		ctx.fillText((rank + 1) + ". " + names[racerIndex] + "色陆行鸟  " + formatRaceTime(racerTime), panelX + 30, panelY + 272 + rank * 18);
+		ctx.fillStyle = "rgba(255, 255, 255, 0.04)";
+		ctx.fillRect(panelX + 20, panelY + 258 + rank * 18, panelWidth - 40, 17);
+		ctx.fillStyle = rank < 3 ? UI_THEME.accent : UI_THEME.muted;
+		ctx.fillText((rank + 1) + ". " + names[racerIndex] + " Chocobo  " + formatRaceTime(racerTime), panelX + 30, panelY + 272 + rank * 18);
 	});
 }
 
@@ -3409,6 +3438,9 @@ function drawChocoboSelection() {
 		ctx.fillStyle = "#3d7659";
 		ctx.fillRect(shrub, horizonY + 8, 20, 8);
 		ctx.fillRect(shrub + 3, horizonY + 5, 14, 5);
+		ctx.fillStyle = "#2f634f";
+		ctx.fillRect(shrub + 1, horizonY + 12, 3, 2);
+		ctx.fillRect(shrub + 10, horizonY + 9, 2, 2);
 		ctx.fillStyle = "#69a16b";
 		ctx.fillRect(shrub + 5, horizonY + 4, 5, 4);
 		ctx.fillRect(shrub + 13, horizonY + 7, 4, 3);
@@ -3547,9 +3579,18 @@ function drawChocoboSelection() {
 		ctx.fillStyle = "#4b3025";
 		ctx.fillRect(leftTreeX + treeWidth / 2 - trunkWidth / 2, sceneryY - treeHeight, trunkWidth, treeHeight);
 		ctx.fillRect(rightTreeX + treeWidth / 2 - trunkWidth / 2, sceneryY - treeHeight, trunkWidth, treeHeight);
+		ctx.strokeStyle = "#171113";
+		ctx.lineWidth = 1;
+		ctx.strokeRect(leftTreeX + treeWidth / 2 - trunkWidth / 2 + 0.5, sceneryY - treeHeight + 0.5, Math.max(1, trunkWidth - 1), Math.max(1, treeHeight - 1));
+		ctx.strokeRect(rightTreeX + treeWidth / 2 - trunkWidth / 2 + 0.5, sceneryY - treeHeight + 0.5, Math.max(1, trunkWidth - 1), Math.max(1, treeHeight - 1));
+		ctx.fillStyle = "#68432d";
+		ctx.fillRect(leftTreeX + treeWidth / 2 - trunkWidth / 2, sceneryY - treeHeight + 5, 2, Math.max(2, Math.round(treeHeight * 0.22)));
+		ctx.fillRect(rightTreeX + treeWidth / 2 - trunkWidth / 2, sceneryY - treeHeight + 8, 2, Math.max(2, Math.round(treeHeight * 0.18)));
 		ctx.fillStyle = darkLeaves;
 		ctx.fillRect(leftTreeX, crownY + 5, treeWidth, crownHeight);
 		ctx.fillRect(rightTreeX, crownY + 5, treeWidth, crownHeight);
+		ctx.strokeRect(leftTreeX + 0.5, crownY + 5.5, Math.max(1, treeWidth - 1), Math.max(1, crownHeight - 1));
+		ctx.strokeRect(rightTreeX + 0.5, crownY + 5.5, Math.max(1, treeWidth - 1), Math.max(1, crownHeight - 1));
 		ctx.fillRect(leftTreeX + Math.round(treeWidth * 0.18), crownY, Math.max(4, Math.round(treeWidth * 0.55)), 7 + scenery % 3);
 		ctx.fillRect(rightTreeX + Math.round(treeWidth * 0.18), crownY, Math.max(4, Math.round(treeWidth * 0.55)), 7 + (scenery + 1) % 3);
 		ctx.fillRect(leftTreeX - Math.round(treeWidth * 0.18), crownY + Math.round(treeWidth * 0.35), Math.max(4, Math.round(treeWidth * 0.3)), Math.max(5, Math.round(treeWidth * 0.4)));
@@ -3569,6 +3610,9 @@ function drawChocoboSelection() {
 		ctx.fillStyle = "#70462a";
 		ctx.fillRect(leftEdge - 22 - treeWidth, railY, Math.max(4, treeWidth * 2), Math.max(2, sceneryScale * 3));
 		ctx.fillRect(rightEdge + 22, railY, Math.max(4, treeWidth * 2), Math.max(2, sceneryScale * 3));
+		ctx.fillStyle = "#9d6337";
+		ctx.fillRect(leftEdge - 18 - treeWidth, railY, Math.max(2, Math.round(treeWidth * 0.35)), 1);
+		ctx.fillRect(rightEdge + 24, railY, Math.max(2, Math.round(treeWidth * 0.35)), 1);
 		if (scenery % 2 === 0) {
 			ctx.fillStyle = "#e65c52";
 			ctx.fillRect(leftEdge - 18 - treeWidth, sceneryY - treeHeight - treeWidth - 8, Math.max(4, treeWidth), Math.max(4, treeWidth / 2));
@@ -3579,12 +3623,15 @@ function drawChocoboSelection() {
 	ctx.textBaseline = "middle";
 	ctx.fillStyle = UI_THEME.text;
 	ctx.font = "bold 17px " + UI_THEME.font;
-	ctx.fillText("选择你的陆行鸟", canvas.width / 2, 24);
+	ctx.fillText("SELECT YOUR CHOCOBO", canvas.width / 2, 24);
+	ctx.fillStyle = UI_THEME.accent;
+	ctx.font = "bold 9px " + UI_THEME.font;
+	ctx.fillText("CHOCOBO DERBY  ·  ENTRY", canvas.width / 2, 41);
 	ctx.fillStyle = UI_THEME.muted;
 	ctx.font = "10px " + UI_THEME.font;
-	ctx.fillText("←→ 选择 · Enter 开始比赛 · ESC 返回", canvas.width / 2, 43);
+	ctx.fillText("←→ SELECT · ENTER START · ESC BACK", canvas.width / 2, 56);
 	var sheet = resources.images.chocoboRaceSheet;
-	var names = ["黄", "白", "粉", "蓝", "绿", "黑", "金", "棕"];
+	var names = ["Yellow", "White", "Pink", "Blue", "Green", "Black", "Gold", "Brown"];
 	var startLeft = roadEdgeAt(startY, "left");
 	var startRight = roadEdgeAt(startY, "right");
 	var startLaneWidth = (startRight - startLeft) / 8;
@@ -3621,7 +3668,7 @@ function drawChocoboSelection() {
 	}
 	ctx.textAlign = "center";
 	ctx.fillStyle = UI_THEME.muted;
-	ctx.fillText("选择后，选中的陆行鸟会向前预跑两步", canvas.width / 2, canvas.height - 14);
+	drawRaceFooter("ENTER 确认    ESC 返回");
 }
 
 function drawRaceBackground() {
@@ -3715,6 +3762,11 @@ function drawRaceBackground() {
 		ctx.fillStyle = "#e2b66a";
 		ctx.fillRect(texture + 20, 228, 9, 2);
 		ctx.fillRect(texture + 2, 310, 13, 2);
+		ctx.fillStyle = "#a96f3f";
+		ctx.fillRect(texture + 8, 216, 5, 1);
+		ctx.fillRect(texture + 34, 248, 4, 1);
+		ctx.fillRect(texture + 18, 288, 7, 1);
+		ctx.fillRect(texture + 41, 332, 5, 1);
 	}
 	ctx.fillStyle = "#292126";
 	ctx.fillRect(0, 188, canvas.width, 4);
