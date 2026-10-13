@@ -48,9 +48,11 @@ var chocoboRace = {
 	winner: -1,
 	tracers: [],
 	cameraX: 0,
-	worldLength: 1250,
-	finishWorldX: 900,
-	ranking: []
+	worldLength: 1700,
+	finishWorldX: 1280,
+	ranking: [],
+	firstFinishTime: null,
+	finishGracePeriod: 5.5
 };
 
 canvas.addEventListener("click", function (event) {
@@ -3102,6 +3104,7 @@ function openChocoboRace() {
 	chocoboRace.winner = -1;
 	chocoboRace.cameraX = 0;
 	chocoboRace.ranking = [];
+	chocoboRace.firstFinishTime = null;
 	var raceSpeeds = createScatteredRaceValues(0.052, 0.078, 0.003);
 	var extraDistances = createScatteredRaceValues(0.035, 0.115, 0.009);
 	chocoboRace.tracers = [];
@@ -3115,7 +3118,12 @@ function openChocoboRace() {
 			celebrateTime: 0,
 			celebrateDistance: extraDistances[index],
 			finishTarget: 1 + extraDistances[index],
-			finishTime: null
+			finishTime: null,
+			staminaPhase: "steady",
+			staminaTimer: 0,
+			staminaOffset: Math.random() * Math.PI * 2,
+			dustSeed: Math.random() * 100,
+			playerAdvantage: false
 		});
 	}
 }
@@ -3127,6 +3135,9 @@ function selectRaceChocobo(index) {
 
 function beginChocoboRaceCountdown() {
 	if (chocoboRace.phase !== "selection") return;
+	chocoboRace.tracers.forEach(function (racer, index) {
+		racer.playerAdvantage = index === chocoboRace.selectedIndex;
+	});
 	chocoboRace.phase = "ready";
 	chocoboRace.readyTimer = 0;
 	chocoboRace.countdown = 3.2;
@@ -3186,11 +3197,36 @@ function updateChocoboRace(modifier) {
 			return;
 		}
 		var wobble = Math.sin(chocoboRace.elapsed * (2.2 + index * 0.13) + index) * 0.004;
-		racer.progress = Math.min(racer.finishTarget, racer.progress + (racer.speed + wobble) * modifier);
+		racer.staminaTimer += modifier;
+		// Use a long stamina cycle so each state lasts several seconds instead
+		// of flickering between effort levels during every short race segment.
+		var staminaWave = Math.sin(racer.staminaTimer * 0.22 + racer.staminaOffset);
+		var previousPhase = racer.staminaPhase;
+		if (staminaWave > 0.72) {
+			racer.staminaPhase = "surge";
+		} else if (staminaWave < -0.72) {
+			racer.staminaPhase = "tired";
+		} else {
+			racer.staminaPhase = "steady";
+		}
+		if (previousPhase !== racer.staminaPhase) racer.dustSeed += 17;
+		var staminaMultiplier = racer.staminaPhase === "surge" ? 1.18 : (racer.staminaPhase === "tired" ? 0.78 : 1);
+		if (racer.playerAdvantage) {
+			staminaMultiplier *= racer.staminaPhase === "tired" ? 1.08 : 1.035;
+		}
+		var leaderProgress = chocoboRace.tracers.reduce(function (maximum, candidate) {
+			return Math.max(maximum, candidate.progress);
+		}, 0);
+		var progressGap = Math.max(0, leaderProgress - racer.progress);
+		var catchUpBoost = Math.min(0.42, progressGap * 1.45);
+		if (chocoboRace.firstFinishTime != null) catchUpBoost = Math.max(catchUpBoost, 0.28);
+		var effectiveSpeed = racer.speed * staminaMultiplier * (1 + catchUpBoost);
+		racer.progress = Math.min(racer.finishTarget, racer.progress + (effectiveSpeed + wobble) * modifier);
 		racer.frame = Math.floor(chocoboRace.elapsed * 10 + index) % 3;
 		if (racer.progress >= 1 && chocoboRace.ranking.indexOf(index) < 0) {
 			chocoboRace.ranking.push(index);
 			racer.finishTime = chocoboRace.elapsed;
+			if (chocoboRace.firstFinishTime == null) chocoboRace.firstFinishTime = chocoboRace.elapsed;
 		}
 		if (racer.progress >= racer.finishTarget) {
 			if (racer.status === "running") {
@@ -3199,6 +3235,18 @@ function updateChocoboRace(modifier) {
 			}
 		}
 	});
+	if (chocoboRace.firstFinishTime != null && chocoboRace.elapsed - chocoboRace.firstFinishTime > chocoboRace.finishGracePeriod) {
+		chocoboRace.tracers.forEach(function (racer, index) {
+			if (racer.status !== "running") return;
+			racer.progress = Math.max(racer.progress, 1);
+			if (chocoboRace.ranking.indexOf(index) < 0) {
+				chocoboRace.ranking.push(index);
+				racer.finishTime = chocoboRace.elapsed;
+			}
+			racer.status = "celebrating";
+			racer.celebrateTime = 0;
+		});
+	}
 	if (chocoboRace.tracers.every(function (racer) { return racer.status === "stopped"; })) {
 		chocoboRace.winner = chocoboRace.ranking[0];
 		chocoboRace.finished = true;
@@ -3208,7 +3256,7 @@ function updateChocoboRace(modifier) {
 		var leader = chocoboRace.tracers.reduce(function (best, racer) {
 			return racer.progress > best.progress ? racer : best;
 		}, chocoboRace.tracers[0]);
-		var targetCamera = leader.progress * chocoboRace.finishWorldX - 260;
+		var targetCamera = leader.progress * chocoboRace.finishWorldX - 300;
 		chocoboRace.cameraX = Math.max(0, Math.min(chocoboRace.worldLength - canvas.width, targetCamera));
 	}
 }
@@ -3233,14 +3281,14 @@ function drawChocoboRace() {
 	ctx.textBaseline = "middle";
 	ctx.fillStyle = UI_THEME.text;
 	ctx.font = "bold 16px " + UI_THEME.font;
-	ctx.fillText("CHOCOBO DERBY", canvas.width / 2, 19);
+	drawRaceReadableText("CHOCOBO DERBY", canvas.width / 2, 19, "center");
 	ctx.fillStyle = UI_THEME.muted;
 	ctx.font = "10px " + UI_THEME.font;
-	ctx.fillText(chocoboRace.phase === "ready" ? "GET READY" : (chocoboRace.finished ? "RACE COMPLETE" : "AUTOMATIC RACE · WATCH"), canvas.width / 2, 36);
+	drawRaceReadableText(chocoboRace.phase === "ready" ? "GET READY" : (chocoboRace.finished ? "RACE COMPLETE" : "AUTOMATIC RACE · WATCH"), canvas.width / 2, 36, "center");
 	ctx.textAlign = "right";
 	ctx.fillStyle = UI_THEME.accent;
 	ctx.font = "bold 9px " + UI_THEME.font;
-	ctx.fillText(chocoboRace.phase === "ready" ? "READY" : (chocoboRace.finished ? "RESULT" : "LIVE"), canvas.width - 24, 19);
+	drawRaceReadableText(chocoboRace.phase === "ready" ? "READY" : (chocoboRace.finished ? "RESULT" : "LIVE"), canvas.width - 24, 19, "right");
 
 	var sheet = resources.images.chocoboRaceSheet;
 	// The dirt course begins at y=192; keep every lane inside that surface.
@@ -3262,7 +3310,7 @@ function drawChocoboRace() {
 		ctx.fillRect(0, laneY - 12, canvas.width, laneHeight);
 		ctx.fillStyle = UI_THEME.text;
 		ctx.textAlign = "left";
-		ctx.fillText(names[index], 10, laneY + 3);
+		drawRaceReadableText(names[index], 10, laneY + 3, "left");
 		ctx.strokeStyle = "rgba(77,43,22,0.45)";
 		ctx.beginPath();
 		ctx.moveTo(0, laneY + 12);
@@ -3270,7 +3318,7 @@ function drawChocoboRace() {
 		ctx.stroke();
 	}
 	if (sheet.ready) {
-		renderOrder.forEach(function (entry) {
+			renderOrder.forEach(function (entry) {
 			var racer = chocoboRace.tracers[entry.index];
 			var racerY = laneTop + entry.index * laneHeight;
 			var racerX = 50 + racer.progress * chocoboRace.finishWorldX - chocoboRace.cameraX;
@@ -3278,6 +3326,7 @@ function drawChocoboRace() {
 			// Draw the footprint immediately before the racer so the track remains
 			// behind the entire character layer and never hides the sprite.
 			renderer.groundShadow(racerX + 3, racerY + 9, 44, 7, 0.34);
+			drawRaceStaminaEffect(racer, racerX, racerY);
 			drawRaceChocobo(sheet.image, entry.index, racer.frame,
 				racerX,
 				// The source frame has transparent padding below the body; lift the
@@ -3324,6 +3373,29 @@ function drawChocoboRace() {
 	drawRaceFooter("ESC 关闭");
 }
 
+function drawRaceStaminaEffect(racer, x, y) {
+	if (racer.status !== "running") return;
+	ctx.save();
+	ctx.imageSmoothingEnabled = false;
+	if (racer.staminaPhase === "surge") {
+		ctx.fillStyle = "rgba(255, 232, 135, 0.85)";
+		ctx.fillRect(x - 9, y + 13, 6, 2);
+		ctx.fillRect(x - 15, y + 20, 9, 2);
+		ctx.fillRect(x - 7, y + 27, 5, 2);
+		ctx.fillStyle = "rgba(242, 196, 109, 0.85)";
+		ctx.fillRect(x - 4, y + 35, 4, 3);
+		ctx.fillRect(x + 5, y + 37, 5, 3);
+	} else if (racer.staminaPhase === "tired") {
+		ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
+		ctx.fillRect(x + 39, y - 3, 3, 3);
+		ctx.fillRect(x + 45, y - 8, 4, 4);
+		ctx.fillStyle = "rgba(92, 68, 48, 0.55)";
+		ctx.fillRect(x + 3, y + 39, 5, 3);
+		ctx.fillRect(x + 13, y + 37, 3, 2);
+	}
+	ctx.restore();
+}
+
 function drawRaceFooter(text) {
 	var width = 120;
 	var x = canvas.width - width - 12;
@@ -3365,7 +3437,7 @@ function drawChocoboResults(sheet, names, panelX, panelY, panelWidth, panelHeigh
 		}
 		ctx.fillStyle = UI_THEME.text;
 		ctx.font = "10px " + UI_THEME.font;
-		ctx.fillText(names[racerIndex], place.x, place.top + place.height + 13);
+		drawRaceReadableText(names[racerIndex], place.x, place.top + place.height + 13, "center");
 	});
 	ctx.textAlign = "left";
 	ctx.font = "11px " + UI_THEME.font;
@@ -3376,7 +3448,7 @@ function drawChocoboResults(sheet, names, panelX, panelY, panelWidth, panelHeigh
 		ctx.fillStyle = "rgba(255, 255, 255, 0.04)";
 		ctx.fillRect(panelX + 20, panelY + 258 + rank * 18, panelWidth - 40, 17);
 		ctx.fillStyle = rank < 3 ? UI_THEME.accent : UI_THEME.muted;
-		ctx.fillText((rank + 1) + ". " + names[racerIndex] + " Chocobo  " + formatRaceTime(racerTime), panelX + 30, panelY + 272 + rank * 18);
+		drawRaceReadableText((rank + 1) + ". " + names[racerIndex] + " Chocobo  " + formatRaceTime(racerTime), panelX + 30, panelY + 272 + rank * 18, "left");
 	});
 }
 
@@ -3385,6 +3457,18 @@ function formatRaceTime(seconds) {
 	var minutes = Math.floor(seconds / 60);
 	var remainingSeconds = Math.floor(seconds % 60);
 	return minutes + ":" + String(remainingSeconds).padStart(2, "0") + "." + String(milliseconds).padStart(3, "0");
+}
+
+function drawRaceReadableText(text, x, y, align) {
+	ctx.save();
+	ctx.textAlign = align || "left";
+	ctx.textBaseline = "middle";
+	ctx.lineWidth = 3;
+	ctx.strokeStyle = "rgba(20, 14, 15, 0.88)";
+	ctx.strokeText(text, x, y);
+	ctx.fillStyle = UI_THEME.text;
+	ctx.fillText(text, x, y);
+	ctx.restore();
 }
 
 function drawChocoboSelection() {
@@ -3623,13 +3707,13 @@ function drawChocoboSelection() {
 	ctx.textBaseline = "middle";
 	ctx.fillStyle = UI_THEME.text;
 	ctx.font = "bold 17px " + UI_THEME.font;
-	ctx.fillText("SELECT YOUR CHOCOBO", canvas.width / 2, 24);
+	drawRaceReadableText("SELECT YOUR CHOCOBO", canvas.width / 2, 24, "center");
 	ctx.fillStyle = UI_THEME.accent;
 	ctx.font = "bold 9px " + UI_THEME.font;
 	ctx.fillText("CHOCOBO DERBY  ·  ENTRY", canvas.width / 2, 41);
 	ctx.fillStyle = UI_THEME.muted;
 	ctx.font = "10px " + UI_THEME.font;
-	ctx.fillText("←→ SELECT · ENTER START · ESC BACK", canvas.width / 2, 56);
+	drawRaceReadableText("←→ SELECT · ENTER START · ESC BACK", canvas.width / 2, 56, "center");
 	var sheet = resources.images.chocoboRaceSheet;
 	var names = ["Yellow", "White", "Pink", "Blue", "Green", "Black", "Gold", "Brown"];
 	var startLeft = roadEdgeAt(startY, "left");
@@ -3648,7 +3732,7 @@ function drawChocoboSelection() {
 		ctx.fillStyle = UI_THEME.text;
 		ctx.textAlign = "center";
 		ctx.font = index === chocoboRace.selectedIndex ? "bold 15px Arial, sans-serif" : "12px Arial, sans-serif";
-		ctx.fillText(names[index], laneX, startY + 30);
+		drawRaceReadableText(names[index], laneX, startY + 30, "center");
 		if (index === chocoboRace.selectedIndex) {
 			ctx.save();
 			ctx.fillStyle = "#ffffff";
