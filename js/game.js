@@ -34,38 +34,8 @@ var systemNotice = {
 };
 var musicPlayer = { visible: false, cover: null };
 var mogWindow = { visible: false, frame: 0 };
-var chocoboRace = {
-	visible: false,
-	phase: "selection",
-	selectedIndex: 0,
-	previewTimer: 0,
-	readyTimer: 0,
-	countdown: 0,
-	countdownShown: 3,
-	started: false,
-	elapsed: 0,
-	finished: false,
-	winner: -1,
-	tracers: [],
-	cameraX: 0,
-	worldLength: 1700,
-	finishWorldX: 1280,
-	ranking: [],
-	playerIndex: -1,
-	firstFinishTime: null,
-	finishGracePeriod: 5.5,
-	eventTimer: 0,
-	nextEventAt: 4.5,
-	activeEvent: null,
-	commentary: "The race is underway!",
-	commentaryTimer: 3,
-	cameraPunch: 0,
-	crowdPulse: 0,
-	lastLeader: -1
-	,raceTransition: { active: false, progress: 0, duration: 1.05, mode: "selection" }
-	,resultsTimer: 0
-};
-var chocoboRaceConfirm = { visible: false, selected: 0 };
+var chocoboRace = PhantomChocoboRace.createState();
+var chocoboRaceConfirm = PhantomChocoboRace.createConfirmState();
 
 canvas.addEventListener("click", function (event) {
 	var bounds = canvas.getBoundingClientRect();
@@ -3132,53 +3102,7 @@ function drawContainedImage(image, x, y, width, height) {
 }
 
 function openChocoboRace() {
-	chocoboRace.visible = true;
-	chocoboRace.phase = "selection";
-	chocoboRace.selectedIndex = 0;
-	chocoboRace.previewTimer = 1.5;
-	chocoboRace.readyTimer = 0;
-	chocoboRace.countdown = 0;
-	chocoboRace.started = false;
-	chocoboRace.elapsed = 0;
-	chocoboRace.finished = false;
-	chocoboRace.winner = -1;
-	chocoboRace.cameraX = 0;
-	chocoboRace.ranking = [];
-	chocoboRace.playerIndex = -1;
-	chocoboRace.firstFinishTime = null;
-	chocoboRace.eventTimer = 0;
-	chocoboRace.nextEventAt = 4.5 + Math.random() * 2;
-	chocoboRace.activeEvent = null;
-	chocoboRace.commentary = "The race is underway!";
-	chocoboRace.commentaryTimer = 3;
-	chocoboRace.cameraPunch = 0;
-	chocoboRace.crowdPulse = 0;
-	chocoboRace.lastLeader = -1;
-	chocoboRace.resultsTimer = 0;
-	chocoboRace.raceTransition = { active: true, progress: 0, duration: 1.05, mode: "selection" };
-	var raceSpeeds = createScatteredRaceValues(0.052, 0.078, 0.003);
-	var extraDistances = createScatteredRaceValues(0.035, 0.115, 0.009);
-	chocoboRace.tracers = [];
-	for (var index = 0; index < 8; index++) {
-		chocoboRace.tracers.push({
-			progress: 0,
-			speed: raceSpeeds[index],
-			frame: 0,
-			finished: false,
-			status: "running",
-			celebrateTime: 0,
-			celebrateDistance: extraDistances[index],
-			finishTarget: 1 + extraDistances[index],
-			finishTime: null,
-			staminaPhase: "steady",
-			staminaTimer: 0,
-			staminaOffset: Math.random() * Math.PI * 2,
-			dustSeed: Math.random() * 100,
-			playerAdvantage: false,
-			eventTimer: 0,
-			eventMultiplier: 1
-		});
-	}
+	PhantomChocoboRace.resetForNewRace(chocoboRace);
 }
 
 function updateRacePresentation(modifier) {
@@ -3238,7 +3162,7 @@ function updateChocoboRaceTransition(modifier) {
 }
 
 function getRaceColorName(index) {
-	return ["Yellow", "White", "Pink", "Blue", "Green", "Black", "Gold", "Brown"][index] || "A Chocobo";
+	return PhantomChocoboRace.colorNames[index] || "A Chocobo";
 }
 
 function selectRaceChocobo(index) {
@@ -3264,19 +3188,7 @@ function closeChocoboRace() {
 }
 
 function createScatteredRaceValues(minimum, maximum, spacing) {
-	var values = [];
-	for (var index = 0; index < 8; index++) {
-		var base = minimum + (maximum - minimum) * index / 7;
-		var jitter = (Math.random() - 0.5) * spacing;
-		values.push(Math.max(minimum, Math.min(maximum, base + jitter)));
-	}
-	for (var current = values.length - 1; current > 0; current--) {
-		var swap = Math.floor(Math.random() * (current + 1));
-		var temporary = values[current];
-		values[current] = values[swap];
-		values[swap] = temporary;
-	}
-	return values;
+	return PhantomChocoboRace.scatteredValues(minimum, maximum, spacing);
 }
 
 function updateChocoboRace(modifier) {
@@ -3432,7 +3344,7 @@ function drawChocoboRace() {
 	ctx.save();
 	ctx.translate(raceJolt, 64);
 	var trackX = 0, trackWidth = canvas.width, laneTop = 200, laneHeight = 27;
-	var names = ["Yellow", "White", "Pink", "Blue", "Green", "Black", "Gold", "Brown"];
+	var names = PhantomChocoboRace.colorNames;
 	var renderOrder = chocoboRace.tracers.map(function (racer, index) {
 		return { index: index };
 	}).sort(function (left, right) {
@@ -3958,7 +3870,7 @@ function drawChocoboSelection() {
 	ctx.font = "10px " + UI_THEME.font;
 	drawRaceReadableText("←→ SELECT · ENTER START · ESC BACK", canvas.width / 2, 56, "center");
 	var sheet = resources.images.chocoboRaceSheet;
-	var names = ["Yellow", "White", "Pink", "Blue", "Green", "Black", "Gold", "Brown"];
+	var names = PhantomChocoboRace.colorNames;
 	var startLeft = roadEdgeAt(startY, "left");
 	var startRight = roadEdgeAt(startY, "right");
 	var startLaneWidth = (startRight - startLeft) / 8;
