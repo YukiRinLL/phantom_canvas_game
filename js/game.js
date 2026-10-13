@@ -3424,125 +3424,40 @@ function drawChocoboRace() {
 }
 
 function drawRaceStaminaEffect(racer, x, y) {
-	if (racer.status !== "running") return;
-	ctx.save();
-	ctx.imageSmoothingEnabled = false;
-	if (racer.staminaPhase === "surge") {
-		ctx.fillStyle = "rgba(255, 232, 135, 0.85)";
-		ctx.fillRect(x - 9, y + 13, 6, 2);
-		ctx.fillRect(x - 15, y + 20, 9, 2);
-		ctx.fillRect(x - 7, y + 27, 5, 2);
-		ctx.fillStyle = "rgba(242, 196, 109, 0.85)";
-		ctx.fillRect(x - 4, y + 35, 4, 3);
-		ctx.fillRect(x + 5, y + 37, 5, 3);
-	} else if (racer.staminaPhase === "tired") {
-		ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
-		ctx.fillRect(x + 39, y - 3, 3, 3);
-		ctx.fillRect(x + 45, y - 8, 4, 4);
-		ctx.fillStyle = "rgba(92, 68, 48, 0.55)";
-		ctx.fillRect(x + 3, y + 39, 5, 3);
-		ctx.fillRect(x + 13, y + 37, 3, 2);
-	}
-	ctx.restore();
+	PhantomChocoboRaceRenderer.staminaEffect(raceRenderEnv(), racer, x, y);
 }
 
 function drawRaceFooter(text) {
-	var width = 120;
-	var x = canvas.width - width - 12;
-	var y = canvas.height - 31;
-	drawRoundedPanel(x, y, width, 20, "rgba(25, 18, 14, 0.9)", "rgba(242, 196, 109, 0.72)");
-	ctx.fillStyle = UI_THEME.muted;
-	ctx.font = "10px " + UI_THEME.font;
-	ctx.textAlign = "center";
-	ctx.textBaseline = "middle";
-	ctx.fillText(text, x + width / 2, y + 10);
+	PhantomChocoboRaceRenderer.footer(raceRenderEnv(), text);
 }
 
 function drawRaceFooterAt(text, x) {
-	var width = 120;
-	var y = canvas.height - 31;
-	drawRoundedPanel(x, y, width, 20, "rgba(25, 18, 14, 0.9)", "rgba(242, 196, 109, 0.72)");
-	ctx.fillStyle = UI_THEME.muted;
-	ctx.font = "10px " + UI_THEME.font;
-	ctx.textAlign = "center";
-	ctx.textBaseline = "middle";
-	ctx.fillText(text, x + width / 2, y + 10);
+	PhantomChocoboRaceRenderer.footer(raceRenderEnv(), text, x);
 }
 
 function drawFarChocoboPrompt() {
-	var width = 300;
-	var x = (canvas.width - width) / 2;
-	var y = (canvas.height - 48) / 2;
-	drawRoundedPanel(x, y, width, 48, "rgba(25, 18, 14, 0.94)", UI_THEME.border);
-	ctx.textAlign = "center";
-	ctx.textBaseline = "middle";
-	ctx.fillStyle = UI_THEME.accent;
-	ctx.font = "bold 13px " + UI_THEME.font;
-	ctx.fillText("按 F 参加陆行鸟竞赛", canvas.width / 2, y + 16);
-	ctx.fillStyle = UI_THEME.muted;
-	ctx.font = "9px " + UI_THEME.font;
-	ctx.fillText("……咕哎？咕、咕、咕哎——咕哎哎，咕呜……", canvas.width / 2, y + 35);
+	PhantomChocoboRaceRenderer.farPrompt(raceRenderEnv());
 }
 
 function drawChocoboRaceConfirm() {
-	var width = 300;
-	var height = 86;
-	var x = (canvas.width - width) / 2;
-	var y = (canvas.height - height) / 2;
-	drawRoundedPanel(x, y, width, height, "rgba(25, 18, 14, 0.96)", UI_THEME.border);
-	ctx.textAlign = "center";
-	ctx.textBaseline = "middle";
-	ctx.fillStyle = UI_THEME.text;
-	ctx.font = "bold 13px " + UI_THEME.font;
-	ctx.fillText("参加陆行鸟竞赛？", canvas.width / 2, y + 22);
-	ctx.font = "bold 12px " + UI_THEME.font;
-	ctx.fillStyle = chocoboRaceConfirm.selected === 0 ? UI_THEME.accent : UI_THEME.muted;
-	ctx.fillText("YES", x + 105, y + 66);
-	ctx.fillStyle = chocoboRaceConfirm.selected === 1 ? UI_THEME.accent : UI_THEME.muted;
-	ctx.fillText("NO", x + 195, y + 66);
+	PhantomChocoboRaceRenderer.confirm(raceRenderEnv(), chocoboRaceConfirm.selected);
 }
 
 function drawRaceCommentary() {
-	var width = Math.min(270, canvas.width - 24);
-	var x = (canvas.width - width) / 2;
-	var y = 69;
-	drawRoundedPanel(x, y, width, 22, "rgba(25, 18, 14, 0.9)", "rgba(242, 196, 109, 0.72)");
-	ctx.fillStyle = UI_THEME.text;
-	ctx.font = "10px " + UI_THEME.font;
-	ctx.textAlign = "center";
-	ctx.textBaseline = "middle";
-	ctx.fillText(chocoboRace.commentary, canvas.width / 2, y + 11);
+	PhantomChocoboRaceRenderer.commentary(raceRenderEnv(), chocoboRace.commentary);
+}
+
+function raceRenderEnv() {
+	return {
+		canvas: canvas,
+		ctx: ctx,
+		theme: UI_THEME,
+		drawRoundedPanel: drawRoundedPanel
+	};
 }
 
 function drawChocoboRaceTransition() {
-	var transition = chocoboRace.raceTransition;
-	if (!transition || !transition.active) return;
-	var halfDuration = transition.duration / 2;
-	var closeMode = transition.mode === "close" || transition.mode === "close-reveal";
-	var diagonalProgress;
-	if (transition.mode === "close") {
-		// Cover the race scene during the first half before switching scenes.
-		diagonalProgress = Math.min(1, transition.progress / halfDuration) * (canvas.width + canvas.height);
-	} else if (transition.mode === "close-reveal") {
-		// Reveal the already-rendered far scene during the second half.
-		diagonalProgress = Math.max(0, 1 - (transition.progress - halfDuration) / halfDuration) * (canvas.width + canvas.height);
-	} else {
-		// Entry starts fully covered and reveals the selection scene.
-		diagonalProgress = Math.max(0, 1 - transition.progress / transition.duration) * (canvas.width + canvas.height);
-	}
-	var tileSize = 16;
-	ctx.save();
-	ctx.fillStyle = "#17121b";
-	// Pixel tiles advance diagonally from the upper-left toward the lower-right.
-	// This gives the race screens a distinct old-console wipe without using a
-	// smooth vector mask.
-	for (var row = 0; row < Math.ceil(canvas.height / tileSize); row++) {
-		for (var column = 0; column < Math.ceil(canvas.width / tileSize); column++) {
-			var diagonal = column * tileSize + row * tileSize;
-			if (diagonal <= diagonalProgress) ctx.fillRect(column * tileSize, row * tileSize, tileSize, tileSize);
-		}
-	}
-	ctx.restore();
+	PhantomChocoboRaceRenderer.transition(raceRenderEnv(), chocoboRace);
 }
 
 function drawChocoboResults(sheet, names, panelX, panelY, panelWidth, panelHeight) {
@@ -3607,6 +3522,10 @@ function drawChocoboResults(sheet, names, panelX, panelY, panelWidth, panelHeigh
 }
 
 function formatRaceTime(seconds) {
+	return formatRaceTimeValue(seconds);
+}
+
+function formatRaceTimeValue(seconds) {
 	var milliseconds = Math.floor((seconds % 1) * 1000);
 	var minutes = Math.floor(seconds / 60);
 	var remainingSeconds = Math.floor(seconds % 60);
@@ -3614,15 +3533,7 @@ function formatRaceTime(seconds) {
 }
 
 function drawRaceReadableText(text, x, y, align) {
-	ctx.save();
-	ctx.textAlign = align || "left";
-	ctx.textBaseline = "middle";
-	ctx.lineWidth = 3;
-	ctx.strokeStyle = "rgba(20, 14, 15, 0.88)";
-	ctx.strokeText(text, x, y);
-	ctx.fillStyle = UI_THEME.text;
-	ctx.fillText(text, x, y);
-	ctx.restore();
+	PhantomChocoboRaceRenderer.readable(raceRenderEnv(), text, x, y, align);
 }
 
 function drawChocoboSelection() {
