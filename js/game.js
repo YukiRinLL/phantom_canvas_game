@@ -51,6 +51,7 @@ var chocoboRace = {
 	worldLength: 1700,
 	finishWorldX: 1280,
 	ranking: [],
+	playerIndex: -1,
 	firstFinishTime: null,
 	finishGracePeriod: 5.5,
 	eventTimer: 0,
@@ -3143,6 +3144,7 @@ function openChocoboRace() {
 	chocoboRace.winner = -1;
 	chocoboRace.cameraX = 0;
 	chocoboRace.ranking = [];
+	chocoboRace.playerIndex = -1;
 	chocoboRace.firstFinishTime = null;
 	chocoboRace.eventTimer = 0;
 	chocoboRace.nextEventAt = 4.5 + Math.random() * 2;
@@ -3249,6 +3251,7 @@ function beginChocoboRaceCountdown() {
 	chocoboRace.tracers.forEach(function (racer, index) {
 		racer.playerAdvantage = index === chocoboRace.selectedIndex;
 	});
+	chocoboRace.playerIndex = chocoboRace.selectedIndex;
 	chocoboRace.phase = "ready";
 	chocoboRace.readyTimer = 0;
 	chocoboRace.countdown = 3.2;
@@ -3679,14 +3682,15 @@ function drawChocoboResults(sheet, names, panelX, panelY, panelWidth, panelHeigh
 	drawRaceReadableText("NAME", nameX, panelY + 244, "center");
 	drawRaceReadableText("TIME", timeX, panelY + 244, "center");
 	chocoboRace.ranking.forEach(function (racerIndex, rank) {
-		ctx.fillStyle = rank < 3 ? UI_THEME.accent : UI_THEME.muted;
 		var racerTime = chocoboRace.tracers[racerIndex].finishTime;
-		ctx.fillStyle = "rgba(255, 255, 255, 0.04)";
+		var isPlayer = racerIndex === chocoboRace.playerIndex;
+		ctx.fillStyle = isPlayer ? "rgba(242, 196, 109, 0.2)" : "rgba(255, 255, 255, 0.04)";
 		ctx.fillRect(tableLeft, panelY + 254 + rank * 18, tableWidth, 17);
-		ctx.fillStyle = rank < 3 ? UI_THEME.accent : UI_THEME.muted;
+		ctx.fillStyle = isPlayer || rank < 3 ? UI_THEME.accent : UI_THEME.muted;
 		drawRaceReadableText(String(rank + 1), rankX, panelY + 263 + rank * 18, "center");
 		drawRaceReadableText(names[racerIndex] + " Chocobo", nameX, panelY + 263 + rank * 18, "center");
 		drawRaceReadableText(formatRaceTime(racerTime), timeX, panelY + 263 + rank * 18, "center");
+		if (isPlayer) drawRaceReadableText("YOU", rankX + 29, panelY + 263 + rank * 18, "left");
 	});
 }
 
