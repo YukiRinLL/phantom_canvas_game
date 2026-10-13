@@ -32,10 +32,12 @@ var systemNotice = {
 	loading: { activity: false, domestic: false, global: false, globalTopics: false },
 	errors: { activity: null, domestic: null, global: null, globalTopics: null }
 };
+var ffrkHintButton = { x: 418, y: 5, width: 42, height: 24 };
 var musicPlayer = { visible: false, cover: null };
 var mogWindow = { visible: false, frame: 0 };
 var chocoboRace = PhantomChocoboRace.createState();
 var chocoboRaceConfirm = PhantomChocoboRace.createConfirmState();
+PhantomFfrkEncyclopedia.load();
 
 canvas.addEventListener("click", function (event) {
 	var bounds = canvas.getBoundingClientRect();
@@ -43,6 +45,11 @@ canvas.addEventListener("click", function (event) {
 	var scaleY = canvas.height / bounds.height;
 	var x = (event.clientX - bounds.left) * scaleX;
 	var y = (event.clientY - bounds.top) * scaleY;
+	if (PhantomFfrkEncyclopedia.handleClick(x, y)) return;
+	if (x >= ffrkHintButton.x && x <= ffrkHintButton.x + ffrkHintButton.width && y >= ffrkHintButton.y && y <= ffrkHintButton.y + ffrkHintButton.height) {
+		PhantomFfrkEncyclopedia.toggle();
+		return;
+	}
 	var button = systemNotice.button;
 	if (x >= button.x && x <= button.x + button.width && y >= button.y && y <= button.y + button.height) {
 		toggleSystemNotice();
@@ -1792,6 +1799,7 @@ function updateCharacters() {
 
 // Update game objects
 var update = function (modifier) {
+	if (PhantomFfrkEncyclopedia.update(PhantomInputSystem)) return;
 	// Update hero position based on keyboard input
 	// Consider 32px wall border and 52x60 character size
 	var heroCollisionGeometry = getHeroCollisionGeometry();
@@ -2638,6 +2646,7 @@ var render = function () {
 
 	// Hero messages are shown in the system notice panel instead of above the hero.
 	drawSystemNotice();
+	drawFfrkHint();
 
 	// Draw interactive elements (only in indoor scene)
 	if (currentScene === "indoor") {
@@ -2889,6 +2898,7 @@ var render = function () {
 		// The far scene has already been rendered underneath this reveal mask.
 		drawChocoboRaceTransition();
 	}
+	PhantomFfrkEncyclopedia.draw({ canvas: canvas, ctx: ctx, font: UI_THEME.font });
 
 };
 
@@ -4171,6 +4181,44 @@ function drawSystemNotice() {
 	ctx.textAlign = "left";
 	ctx.textBaseline = "middle";
 	ctx.fillText(messages.length > visibleCount ? "←→ 切换 · ↑↓ 滚动 · ESC 关闭" : "←→ 切换 · ESC 关闭", panelX + 18, footerY);
+}
+
+function drawFfrkHint() {
+	var button = ffrkHintButton;
+	ctx.save();
+	ctx.fillStyle = PhantomFfrkEncyclopedia.state.visible ? "#f2c46d" : "rgba(32, 27, 24, 0.85)";
+	ctx.strokeStyle = "#f2c46d";
+	ctx.lineWidth = 1;
+	ctx.beginPath();
+	ctx.roundRect(button.x, button.y, button.width, button.height, 6);
+	ctx.fill();
+	ctx.stroke();
+	var iconColor = PhantomFfrkEncyclopedia.state.visible ? "#4a2911" : "#fff3d1";
+	ctx.fillStyle = iconColor;
+	ctx.strokeStyle = iconColor;
+	ctx.lineWidth = 1.2;
+	ctx.beginPath();
+	ctx.moveTo(button.x + 6, button.y + 7);
+	ctx.lineTo(button.x + 15, button.y + 7);
+	ctx.lineTo(button.x + 15, button.y + 18);
+	ctx.lineTo(button.x + 6, button.y + 18);
+	ctx.closePath();
+	ctx.stroke();
+	ctx.beginPath();
+	ctx.moveTo(button.x + 10.5, button.y + 7);
+	ctx.lineTo(button.x + 10.5, button.y + 18);
+	ctx.stroke();
+	ctx.beginPath();
+	ctx.moveTo(button.x + 8, button.y + 10);
+	ctx.lineTo(button.x + 9, button.y + 10);
+	ctx.moveTo(button.x + 12, button.y + 10);
+	ctx.lineTo(button.x + 13, button.y + 10);
+	ctx.stroke();
+	ctx.font = "bold 12px system-ui";
+	ctx.textAlign = "center";
+	ctx.textBaseline = "middle";
+	ctx.fillText("T", button.x + 29, button.y + button.height / 2);
+	ctx.restore();
 }
 
 function isPointInMogHint(x, y) {
