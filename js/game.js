@@ -64,6 +64,7 @@ var chocoboRace = {
 	,raceTransition: { active: false, progress: 0, duration: 1.05, mode: "selection" }
 	,resultsTimer: 0
 };
+var chocoboRaceConfirm = { visible: false, selected: 0 };
 
 canvas.addEventListener("click", function (event) {
 	var bounds = canvas.getBoundingClientRect();
@@ -1828,7 +1829,7 @@ var update = function (modifier) {
 	var wallSize = 32;
 
 	// Don't move if message book is open
-	if (!messageBook.visible && !musicPlayer.visible && !chocoboRace.visible) {
+	if (!messageBook.visible && !musicPlayer.visible && !chocoboRace.visible && !chocoboRaceConfirm.visible) {
 		var allowArrowMovement = !systemNotice.visible;
 		var moveX = (keysDown[68] || (allowArrowMovement && keysDown[39]) ? 1 : 0) - (keysDown[65] || (allowArrowMovement && keysDown[37]) ? 1 : 0);
 		var moveY = (keysDown[83] || (allowArrowMovement && keysDown[40]) ? 1 : 0) - (keysDown[87] || (allowArrowMovement && keysDown[38]) ? 1 : 0);
@@ -2186,7 +2187,8 @@ var update = function (modifier) {
 		);
 		farChocobo.interactable = farChocoboDistance < 58;
 		if (farChocobo.interactable && keysDown[70]) {
-			openChocoboRace();
+			chocoboRaceConfirm.visible = true;
+			chocoboRaceConfirm.selected = 0;
 			delete keysDown[70];
 		}
 	}
@@ -2219,6 +2221,27 @@ var update = function (modifier) {
 	if (chocoboRace.visible && keysDown[27]) {
 		closeChocoboRace();
 		delete keysDown[27];
+	}
+	if (chocoboRace.visible && chocoboRace.finished && keysDown[13]) {
+		openChocoboRace();
+		delete keysDown[13];
+	}
+	if (chocoboRaceConfirm.visible) {
+		if (keysDown[37] || keysDown[39]) {
+			chocoboRaceConfirm.selected = chocoboRaceConfirm.selected ? 0 : 1;
+			delete keysDown[37];
+			delete keysDown[39];
+		}
+		if (keysDown[27]) {
+			chocoboRaceConfirm.visible = false;
+			delete keysDown[27];
+		}
+		if (keysDown[13] || keysDown[70]) {
+			if (chocoboRaceConfirm.selected === 0) openChocoboRace();
+			chocoboRaceConfirm.visible = false;
+			delete keysDown[13];
+			delete keysDown[70];
+		}
 	}
 	if (chocoboRace.visible && chocoboRace.phase === "selection") {
 		if (keysDown[37]) { selectRaceChocobo(chocoboRace.selectedIndex - 1); delete keysDown[37]; }
@@ -2664,7 +2687,9 @@ var render = function () {
 		drawChatBubble(366, 378, "库啵", "left");
 	}
 	if (currentScene === "far" && interactiveElements.farChocobo.interactable && !chocoboRace.visible) {
-		drawChatBubble(38, 378, "开始比赛？按 F", "right");
+		drawChatBubble(38, 378, "咕哎！", "right");
+		if (chocoboRaceConfirm.visible) drawChocoboRaceConfirm();
+		else drawFarChocoboPrompt();
 	}
 
 	// Draw message book
@@ -3479,6 +3504,7 @@ function drawChocoboRace() {
 	ctx.fillStyle = UI_THEME.muted;
 	ctx.font = "10px " + UI_THEME.font;
 	drawRaceFooter("ESC 关闭");
+	if (chocoboRace.finished) drawRaceFooterAt("ENTER 再来一局", 12);
 	drawChocoboRaceTransition();
 }
 
@@ -3515,6 +3541,50 @@ function drawRaceFooter(text) {
 	ctx.textAlign = "center";
 	ctx.textBaseline = "middle";
 	ctx.fillText(text, x + width / 2, y + 10);
+}
+
+function drawRaceFooterAt(text, x) {
+	var width = 120;
+	var y = canvas.height - 31;
+	drawRoundedPanel(x, y, width, 20, "rgba(25, 18, 14, 0.9)", "rgba(242, 196, 109, 0.72)");
+	ctx.fillStyle = UI_THEME.muted;
+	ctx.font = "10px " + UI_THEME.font;
+	ctx.textAlign = "center";
+	ctx.textBaseline = "middle";
+	ctx.fillText(text, x + width / 2, y + 10);
+}
+
+function drawFarChocoboPrompt() {
+	var width = 300;
+	var x = (canvas.width - width) / 2;
+	var y = (canvas.height - 48) / 2;
+	drawRoundedPanel(x, y, width, 48, "rgba(25, 18, 14, 0.94)", UI_THEME.border);
+	ctx.textAlign = "center";
+	ctx.textBaseline = "middle";
+	ctx.fillStyle = UI_THEME.accent;
+	ctx.font = "bold 13px " + UI_THEME.font;
+	ctx.fillText("按 F 参加陆行鸟竞赛", canvas.width / 2, y + 16);
+	ctx.fillStyle = UI_THEME.muted;
+	ctx.font = "9px " + UI_THEME.font;
+	ctx.fillText("……咕哎？咕、咕、咕哎——咕哎哎，咕呜……", canvas.width / 2, y + 35);
+}
+
+function drawChocoboRaceConfirm() {
+	var width = 300;
+	var height = 86;
+	var x = (canvas.width - width) / 2;
+	var y = (canvas.height - height) / 2;
+	drawRoundedPanel(x, y, width, height, "rgba(25, 18, 14, 0.96)", UI_THEME.border);
+	ctx.textAlign = "center";
+	ctx.textBaseline = "middle";
+	ctx.fillStyle = UI_THEME.text;
+	ctx.font = "bold 13px " + UI_THEME.font;
+	ctx.fillText("参加陆行鸟竞赛？", canvas.width / 2, y + 22);
+	ctx.font = "bold 12px " + UI_THEME.font;
+	ctx.fillStyle = chocoboRaceConfirm.selected === 0 ? UI_THEME.accent : UI_THEME.muted;
+	ctx.fillText("YES", x + 105, y + 66);
+	ctx.fillStyle = chocoboRaceConfirm.selected === 1 ? UI_THEME.accent : UI_THEME.muted;
+	ctx.fillText("NO", x + 195, y + 66);
 }
 
 function drawRaceCommentary() {
