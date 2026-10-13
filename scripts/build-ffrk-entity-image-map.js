@@ -48,8 +48,15 @@ async function fetchPage(page) {
 }
 
 async function main() {
-  const imageIndex = JSON.parse(fs.readFileSync(path.join(root, "ffrk", "images", "index.json"), "utf8"));
-  const localImages = Object.fromEntries(imageIndex.map((item) => [item.id, `images/ffrk/${imageFolder(item.category)}/${item.id}.png`]));
+  const localImages = {};
+  function indexImages(directory) {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const entryPath = path.join(directory, entry.name);
+      if (entry.isDirectory()) indexImages(entryPath);
+      else if (entry.name.endsWith(".png")) localImages[path.basename(entry.name, ".png")] = path.relative(root, entryPath).replace(/\\/g, "/");
+    }
+  }
+  indexImages(path.join(root, "images", "ffrk"));
   const result = {};
   for (const category of categories) {
     for (const game of series) {
