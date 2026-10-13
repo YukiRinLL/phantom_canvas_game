@@ -62,6 +62,7 @@ var chocoboRace = {
 	crowdPulse: 0,
 	lastLeader: -1
 	,raceTransition: { active: false, progress: 0, duration: 1.05, mode: "selection" }
+	,resultsTimer: 0
 };
 
 canvas.addEventListener("click", function (event) {
@@ -3126,6 +3127,7 @@ function openChocoboRace() {
 	chocoboRace.cameraPunch = 0;
 	chocoboRace.crowdPulse = 0;
 	chocoboRace.lastLeader = -1;
+	chocoboRace.resultsTimer = 0;
 	chocoboRace.raceTransition = { active: true, progress: 0, duration: 1.05, mode: "selection" };
 	var raceSpeeds = createScatteredRaceValues(0.052, 0.078, 0.003);
 	var extraDistances = createScatteredRaceValues(0.035, 0.115, 0.009);
@@ -3253,6 +3255,7 @@ function updateChocoboRace(modifier) {
 	if (chocoboRace.raceTransition && chocoboRace.raceTransition.active) {
 		updateChocoboRaceTransition(modifier);
 	}
+	if (chocoboRace.finished) chocoboRace.resultsTimer += modifier;
 	if (chocoboRace.phase === "selection") {
 		chocoboRace.elapsed += modifier;
 		if (chocoboRace.previewTimer > 0) {
@@ -3352,6 +3355,7 @@ function updateChocoboRace(modifier) {
 		chocoboRace.winner = chocoboRace.ranking[0];
 		chocoboRace.finished = true;
 		chocoboRace.started = false;
+		chocoboRace.resultsTimer = 0;
 	}
 	if (chocoboRace.elapsed > 1.2 && !chocoboRace.finished) {
 		var leader = chocoboRace.tracers.reduce(function (best, racer) {
@@ -3387,7 +3391,7 @@ function drawChocoboRace() {
 	drawRaceReadableText("CHOCOBO DERBY", canvas.width / 2, 19, "center");
 	ctx.fillStyle = UI_THEME.muted;
 	ctx.font = "10px " + UI_THEME.font;
-	drawRaceReadableText(chocoboRace.phase === "ready" ? "GET READY" : (chocoboRace.finished ? "RACE COMPLETE" : "AUTOMATIC RACE · WATCH"), canvas.width / 2, 36, "center");
+	drawRaceReadableText(chocoboRace.phase === "ready" ? "GET READY" : (chocoboRace.finished ? "RACE COMPLETE" : "AUTOMATIC RACE"), canvas.width / 2, 36, "center");
 	ctx.textAlign = "right";
 	ctx.fillStyle = UI_THEME.accent;
 	ctx.font = "bold 9px " + UI_THEME.font;
@@ -3572,31 +3576,47 @@ function drawChocoboResults(sheet, names, panelX, panelY, panelWidth, panelHeigh
 	podium.forEach(function (place) {
 		var racerIndex = chocoboRace.ranking[place.rank - 1];
 		if (racerIndex == null) return;
+		ctx.fillStyle = "rgba(15, 10, 12, 0.55)";
+		ctx.fillRect(place.x - place.width / 2 + 4, place.top + place.height, place.width, 5);
 		ctx.fillStyle = place.color;
 		ctx.fillRect(place.x - place.width / 2, place.top, place.width, place.height);
+		ctx.fillStyle = "rgba(255,255,255,0.18)";
+		ctx.fillRect(place.x - place.width / 2 + 5, place.top + 6, place.width - 10, 3);
 		ctx.fillStyle = "#302225";
 		ctx.fillRect(place.x - place.width / 2, place.top, place.width, 4);
+		ctx.fillRect(place.x - place.width / 2, place.top + place.height - 4, place.width, 4);
 		ctx.fillStyle = "#fff1bd";
 		ctx.font = "bold 20px " + UI_THEME.font;
 		ctx.fillText(String(place.rank), place.x, place.top + 26);
 		if (sheet.ready) {
-			drawRaceChocobo(sheet.image, racerIndex, 1,
+			var podiumFrame = place.rank === 1 && chocoboRace.resultsTimer < 1 ? Math.floor(chocoboRace.resultsTimer * 8) % 3 : 1;
+			drawRaceChocobo(sheet.image, racerIndex, podiumFrame,
 				place.x - 24, place.top - 46, 46, 46, 0);
 		}
 		ctx.fillStyle = UI_THEME.text;
 		ctx.font = "10px " + UI_THEME.font;
 		drawRaceReadableText(names[racerIndex], place.x, place.top + place.height + 13, "center");
 	});
-	ctx.textAlign = "left";
-	ctx.font = "11px " + UI_THEME.font;
-	ctx.fillStyle = UI_THEME.text;
+	var tableLeft = panelX + 42;
+	var tableWidth = panelWidth - 84;
+	var rankX = tableLeft + 30;
+	var nameX = tableLeft + tableWidth / 2;
+	var timeX = tableLeft + tableWidth - 30;
+	ctx.textAlign = "center";
+	ctx.font = "bold 10px " + UI_THEME.font;
+	ctx.fillStyle = UI_THEME.accent;
+	drawRaceReadableText("RANK", rankX, panelY + 244, "center");
+	drawRaceReadableText("NAME", nameX, panelY + 244, "center");
+	drawRaceReadableText("TIME", timeX, panelY + 244, "center");
 	chocoboRace.ranking.forEach(function (racerIndex, rank) {
 		ctx.fillStyle = rank < 3 ? UI_THEME.accent : UI_THEME.muted;
 		var racerTime = chocoboRace.tracers[racerIndex].finishTime;
 		ctx.fillStyle = "rgba(255, 255, 255, 0.04)";
-		ctx.fillRect(panelX + 20, panelY + 258 + rank * 18, panelWidth - 40, 17);
+		ctx.fillRect(tableLeft, panelY + 254 + rank * 18, tableWidth, 17);
 		ctx.fillStyle = rank < 3 ? UI_THEME.accent : UI_THEME.muted;
-		drawRaceReadableText((rank + 1) + ". " + names[racerIndex] + " Chocobo  " + formatRaceTime(racerTime), panelX + 30, panelY + 272 + rank * 18, "left");
+		drawRaceReadableText(String(rank + 1), rankX, panelY + 263 + rank * 18, "center");
+		drawRaceReadableText(names[racerIndex] + " Chocobo", nameX, panelY + 263 + rank * 18, "center");
+		drawRaceReadableText(formatRaceTime(racerTime), timeX, panelY + 263 + rank * 18, "center");
 	});
 }
 
@@ -3906,6 +3926,7 @@ function drawChocoboSelection() {
 
 function drawRaceBackground() {
 	var farOffset = Math.floor(chocoboRace.cameraX * 0.18);
+	var cloudOffset = Math.floor(chocoboRace.cameraX * 0.05);
 	var nearOffset = Math.floor(chocoboRace.cameraX * 0.5);
 	ctx.imageSmoothingEnabled = false;
 	ctx.fillStyle = "#63b8d1";
@@ -3914,7 +3935,7 @@ function drawRaceBackground() {
 	ctx.fillRect(0, 54, canvas.width, 20);
 	ctx.fillStyle = "#a9dce0";
 	ctx.fillRect(0, 74, canvas.width, 14);
-	for (var cloud = -((farOffset * 2) % 150) - 80; cloud < canvas.width + 120; cloud += 150) {
+	for (var cloud = -((cloudOffset) % 150) - 80; cloud < canvas.width + 120; cloud += 150) {
 		ctx.fillStyle = "#eaf3dc";
 		ctx.fillRect(cloud + 12, 24, 42, 8);
 		ctx.fillRect(cloud, 32, 72, 8);
