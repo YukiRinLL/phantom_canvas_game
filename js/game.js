@@ -394,6 +394,20 @@ var resources = {
 			paths: ["images/mog-sprite-sheet.png"],
 			currentPathIndex: 0,
 			name: "mog sprite sheet"
+		},
+		moogle8bit: {
+			ready: false,
+			image: null,
+			paths: ["images/moogle-8bit.png"],
+			currentPathIndex: 0,
+			name: "8-bit moogle"
+		},
+		chocoboPixel: {
+			ready: false,
+			image: null,
+			paths: ["images/chocobo-pixel.png"],
+			currentPathIndex: 0,
+			name: "pixel chocobo"
 		}
 	},
 	
@@ -784,6 +798,13 @@ var interactiveElements = {
 			frame: 0,
 			interactable: false,
 			showHint: false
+		},
+		farMoogle: {
+			x: 352,
+			y: 390,
+			width: 48,
+			height: 48,
+			showBubble: false
 		}
 };
 
@@ -2104,6 +2125,12 @@ var update = function (modifier) {
 			mogWindow.frame = 0;
 			delete keysDown[70];
 		}
+		var farMoogle = interactiveElements.farMoogle;
+		var farMoogleDistance = Math.sqrt(
+			Math.pow(hero.x + 26 - (farMoogle.x + farMoogle.width / 2), 2) +
+			Math.pow(hero.y + 30 - (farMoogle.y + farMoogle.height / 2), 2)
+		);
+		farMoogle.showBubble = farMoogleDistance < 58;
 	}
 	if (mogWindow.visible) mogWindow.frame = (mogWindow.frame + modifier * 6) % 13;
 
@@ -2464,6 +2491,7 @@ var render = function () {
 		}
 	} else if (currentScene === "far") {
 		// Draw hero in far scene
+		drawFarCompanions(true);
 		if (heroReady) {
 			ctx.globalAlpha = hero.alpha;
 			renderer.groundShadow(hero.x, hero.y + heroGeometry.height - 8, heroGeometry.width, 8, hero.alpha * 0.3);
@@ -2473,6 +2501,7 @@ var render = function () {
 			ctx.restore();
 			ctx.globalAlpha = 1;
 		}
+		drawFarCompanions(false);
 	}
 	if (currentScene === "far") drawMogSprite(interactiveElements.mog.x, interactiveElements.mog.y, interactiveElements.mog.frame, 0.66);
 
@@ -2558,6 +2587,9 @@ var render = function () {
 		}
 	} else if (currentScene === "far" && interactiveElements.mog.showHint) {
 		drawInteractionHint("莫古力", "按 F 查看动态");
+	}
+	if (currentScene === "far" && interactiveElements.farMoogle.showBubble) {
+		drawChatBubble(366, 378, "库啵", "left");
 	}
 
 	// Draw message book
@@ -2964,6 +2996,33 @@ function drawMogSprite(x, y, frame, scale) {
 	var displayWidth = 48 * scale;
 	var displayHeight = displayWidth * source.height / source.width;
 	ctx.drawImage(resource.image, source.x, source.y, source.width, source.height, x, y, displayWidth, displayHeight);
+}
+
+function drawFarCompanions(beforeHero) {
+	var moogle = resources.images.moogle8bit;
+	var chocobo = resources.images.chocoboPixel;
+	var farMoogle = interactiveElements.farMoogle;
+	var heroFeet = hero.y + heroGeometry.height;
+	ctx.imageSmoothingEnabled = false;
+	var chocoboFeet = 393 + 48;
+	var moogleFeet = 390 + 48;
+	if (chocobo.ready && (chocoboFeet <= heroFeet) === beforeHero) {
+		renderer.groundShadow(30, 393 + 48 - 8, 48, 8, 0.3);
+		drawContainedImage(chocobo.image, 30, 393, 48, 48);
+	}
+	// Keep the decorative moogle near the lower-right, separate from the
+	// interactive small moogle already placed farther right.
+	if (moogle.ready && (moogleFeet <= heroFeet) === beforeHero) {
+		renderer.groundShadow(farMoogle.x, farMoogle.y + farMoogle.height - 8, farMoogle.width, 8, 0.3);
+		drawContainedImage(moogle.image, farMoogle.x, farMoogle.y, farMoogle.width, farMoogle.height);
+	}
+}
+
+function drawContainedImage(image, x, y, width, height) {
+	var scale = Math.min(width / image.width, height / image.height);
+	var drawWidth = image.width * scale;
+	var drawHeight = image.height * scale;
+	ctx.drawImage(image, x + (width - drawWidth) / 2, y + (height - drawHeight) / 2, drawWidth, drawHeight);
 }
 
 function drawMogWindow() {
