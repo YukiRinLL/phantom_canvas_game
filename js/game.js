@@ -34,6 +34,24 @@ var systemNotice = {
 };
 var musicPlayer = { visible: false, cover: null };
 var mogWindow = { visible: false, frame: 0 };
+var chocoboRace = {
+	visible: false,
+	phase: "selection",
+	selectedIndex: 0,
+	previewTimer: 0,
+	readyTimer: 0,
+	countdown: 0,
+	countdownShown: 3,
+	started: false,
+	elapsed: 0,
+	finished: false,
+	winner: -1,
+	tracers: [],
+	cameraX: 0,
+	worldLength: 1250,
+	finishWorldX: 900,
+	ranking: []
+};
 
 canvas.addEventListener("click", function (event) {
 	var bounds = canvas.getBoundingClientRect();
@@ -52,6 +70,10 @@ canvas.addEventListener("click", function (event) {
 	}
 	if (mogWindow.visible && isPointInMogWindow(x, y)) {
 		mogWindow.visible = false;
+		return;
+	}
+	if (chocoboRace.visible && isPointInChocoboRaceClose(x, y)) {
+		chocoboRace.visible = false;
 		return;
 	}
 	if (systemNotice.visible && isPointInSystemNoticeItem(x, y)) {
@@ -408,6 +430,13 @@ var resources = {
 			paths: ["images/chocobo-pixel.png"],
 			currentPathIndex: 0,
 			name: "pixel chocobo"
+		},
+		chocoboRaceSheet: {
+			ready: false,
+			image: null,
+			paths: ["images/chocobo-race-sprite-sheet.png"],
+			currentPathIndex: 0,
+			name: "chocobo race sprite sheet"
 		}
 	},
 	
@@ -805,6 +834,13 @@ var interactiveElements = {
 			width: 48,
 			height: 48,
 			showBubble: false
+		},
+		farChocobo: {
+			x: 30,
+			y: 393,
+			width: 48,
+			height: 48,
+			interactable: false
 		}
 };
 
@@ -1780,7 +1816,7 @@ var update = function (modifier) {
 	var wallSize = 32;
 
 	// Don't move if message book is open
-	if (!messageBook.visible && !musicPlayer.visible) {
+	if (!messageBook.visible && !musicPlayer.visible && !chocoboRace.visible) {
 		var allowArrowMovement = !systemNotice.visible;
 		var moveX = (keysDown[68] || (allowArrowMovement && keysDown[39]) ? 1 : 0) - (keysDown[65] || (allowArrowMovement && keysDown[37]) ? 1 : 0);
 		var moveY = (keysDown[83] || (allowArrowMovement && keysDown[40]) ? 1 : 0) - (keysDown[87] || (allowArrowMovement && keysDown[38]) ? 1 : 0);
@@ -2131,7 +2167,18 @@ var update = function (modifier) {
 			Math.pow(hero.y + 30 - (farMoogle.y + farMoogle.height / 2), 2)
 		);
 		farMoogle.showBubble = farMoogleDistance < 58;
+		var farChocobo = interactiveElements.farChocobo;
+		var farChocoboDistance = Math.sqrt(
+			Math.pow(hero.x + 26 - (farChocobo.x + farChocobo.width / 2), 2) +
+			Math.pow(hero.y + 30 - (farChocobo.y + farChocobo.height / 2), 2)
+		);
+		farChocobo.interactable = farChocoboDistance < 58;
+		if (farChocobo.interactable && keysDown[70]) {
+			openChocoboRace();
+			delete keysDown[70];
+		}
 	}
+	if (chocoboRace.visible) updateChocoboRace(modifier);
 	if (mogWindow.visible) mogWindow.frame = (mogWindow.frame + modifier * 6) % 13;
 
 	// Handle message book navigation
@@ -2156,6 +2203,19 @@ var update = function (modifier) {
 		mogWindow.frame = (Math.floor(mogWindow.frame) + 1) % 13;
 		delete keysDown[39];
 		delete keysDown[38];
+	}
+	if (chocoboRace.visible && keysDown[27]) {
+		chocoboRace.visible = false;
+		delete keysDown[27];
+	}
+	if (chocoboRace.visible && chocoboRace.phase === "selection") {
+		if (keysDown[37]) { selectRaceChocobo(chocoboRace.selectedIndex - 1); delete keysDown[37]; }
+		if (keysDown[39]) { selectRaceChocobo(chocoboRace.selectedIndex + 1); delete keysDown[39]; }
+		if (keysDown[13] || keysDown[32]) {
+			beginChocoboRaceCountdown();
+			delete keysDown[13];
+			delete keysDown[32];
+		}
 	}
 	if (messageBook.visible) {
 		if (messageBook.detailVisible) {
@@ -2591,6 +2651,9 @@ var render = function () {
 	if (currentScene === "far" && interactiveElements.farMoogle.showBubble) {
 		drawChatBubble(366, 378, "库啵", "left");
 	}
+	if (currentScene === "far" && interactiveElements.farChocobo.interactable && !chocoboRace.visible) {
+		drawChatBubble(38, 378, "开始比赛？按 F", "right");
+	}
 
 	// Draw message book
 	if (messageBook.visible) {
@@ -2789,6 +2852,7 @@ var render = function () {
 	}
 	drawMusicPlayer();
 	drawMogWindow();
+	drawChocoboRace();
 
 	// Debug is the final screen layer: it must remain visible above foregrounds
 	// and in-game panels while never being transformed by the camera.
@@ -3023,6 +3087,666 @@ function drawContainedImage(image, x, y, width, height) {
 	var drawWidth = image.width * scale;
 	var drawHeight = image.height * scale;
 	ctx.drawImage(image, x + (width - drawWidth) / 2, y + (height - drawHeight) / 2, drawWidth, drawHeight);
+}
+
+function openChocoboRace() {
+	chocoboRace.visible = true;
+	chocoboRace.phase = "selection";
+	chocoboRace.selectedIndex = 0;
+	chocoboRace.previewTimer = 1.5;
+	chocoboRace.readyTimer = 0;
+	chocoboRace.countdown = 0;
+	chocoboRace.started = false;
+	chocoboRace.elapsed = 0;
+	chocoboRace.finished = false;
+	chocoboRace.winner = -1;
+	chocoboRace.cameraX = 0;
+	chocoboRace.ranking = [];
+	var raceSpeeds = createScatteredRaceValues(0.052, 0.078, 0.003);
+	var extraDistances = createScatteredRaceValues(0.035, 0.115, 0.009);
+	chocoboRace.tracers = [];
+	for (var index = 0; index < 8; index++) {
+		chocoboRace.tracers.push({
+			progress: 0,
+			speed: raceSpeeds[index],
+			frame: 0,
+			finished: false,
+			status: "running",
+			celebrateTime: 0,
+			celebrateDistance: extraDistances[index],
+			finishTarget: 1 + extraDistances[index],
+			finishTime: null
+		});
+	}
+}
+
+function selectRaceChocobo(index) {
+	chocoboRace.selectedIndex = (index + 8) % 8;
+	chocoboRace.previewTimer = 1.5;
+}
+
+function beginChocoboRaceCountdown() {
+	if (chocoboRace.phase !== "selection") return;
+	chocoboRace.phase = "ready";
+	chocoboRace.readyTimer = 0;
+	chocoboRace.countdown = 3.2;
+	chocoboRace.countdownShown = 3;
+}
+
+function createScatteredRaceValues(minimum, maximum, spacing) {
+	var values = [];
+	for (var index = 0; index < 8; index++) {
+		var base = minimum + (maximum - minimum) * index / 7;
+		var jitter = (Math.random() - 0.5) * spacing;
+		values.push(Math.max(minimum, Math.min(maximum, base + jitter)));
+	}
+	for (var current = values.length - 1; current > 0; current--) {
+		var swap = Math.floor(Math.random() * (current + 1));
+		var temporary = values[current];
+		values[current] = values[swap];
+		values[swap] = temporary;
+	}
+	return values;
+}
+
+function updateChocoboRace(modifier) {
+	if (chocoboRace.phase === "selection") {
+		chocoboRace.elapsed += modifier;
+		if (chocoboRace.previewTimer > 0) {
+			chocoboRace.previewTimer = Math.max(0, chocoboRace.previewTimer - modifier);
+		}
+		return;
+	}
+	if (chocoboRace.phase === "ready") {
+		chocoboRace.readyTimer += modifier;
+		if (chocoboRace.readyTimer < 0.8) {
+			// Play the selected bird's forward-running animation without changing
+			// its race position before the countdown starts.
+			chocoboRace.tracers[chocoboRace.selectedIndex].frame = Math.floor(chocoboRace.readyTimer * 10) % 3;
+		}
+		chocoboRace.countdown -= modifier;
+		if (chocoboRace.countdown <= 0) {
+			chocoboRace.phase = "race";
+			chocoboRace.started = true;
+		}
+		return;
+	}
+	if (!chocoboRace.started || chocoboRace.finished) return;
+	chocoboRace.elapsed += modifier;
+	chocoboRace.tracers.forEach(function (racer, index) {
+		if (racer.status === "stopped") return;
+		if (racer.status === "celebrating") {
+			racer.celebrateTime += modifier;
+			racer.frame = Math.floor(chocoboRace.elapsed * 8 + index) % 3;
+			if (racer.celebrateTime >= 2.5) {
+				racer.status = "stopped";
+				// Hold the second frame as the standing pose after the front-facing run.
+				racer.frame = 1;
+			}
+			return;
+		}
+		var wobble = Math.sin(chocoboRace.elapsed * (2.2 + index * 0.13) + index) * 0.004;
+		racer.progress = Math.min(racer.finishTarget, racer.progress + (racer.speed + wobble) * modifier);
+		racer.frame = Math.floor(chocoboRace.elapsed * 10 + index) % 3;
+		if (racer.progress >= 1 && chocoboRace.ranking.indexOf(index) < 0) {
+			chocoboRace.ranking.push(index);
+			racer.finishTime = chocoboRace.elapsed;
+		}
+		if (racer.progress >= racer.finishTarget) {
+			if (racer.status === "running") {
+				racer.status = "celebrating";
+				racer.celebrateTime = 0;
+			}
+		}
+	});
+	if (chocoboRace.tracers.every(function (racer) { return racer.status === "stopped"; })) {
+		chocoboRace.winner = chocoboRace.ranking[0];
+		chocoboRace.finished = true;
+		chocoboRace.started = false;
+	}
+	if (chocoboRace.elapsed > 1.2 && !chocoboRace.finished) {
+		var leader = chocoboRace.tracers.reduce(function (best, racer) {
+			return racer.progress > best.progress ? racer : best;
+		}, chocoboRace.tracers[0]);
+		var targetCamera = leader.progress * chocoboRace.finishWorldX - 260;
+		chocoboRace.cameraX = Math.max(0, Math.min(chocoboRace.worldLength - canvas.width, targetCamera));
+	}
+}
+
+function drawChocoboRace() {
+	if (!chocoboRace.visible) return;
+	if (chocoboRace.phase === "selection") {
+		drawChocoboSelection();
+		return;
+	}
+	var panelX = 12, panelY = 12, panelWidth = canvas.width - 24, panelHeight = canvas.height - 24;
+	ctx.fillStyle = "#8ed0dc";
+	ctx.fillRect(0, 0, canvas.width, canvas.height);
+	drawRaceBackground();
+	ctx.fillStyle = "rgba(25, 16, 12, 0.78)";
+	ctx.fillRect(0, 0, canvas.width, 54);
+	ctx.textAlign = "center";
+	ctx.textBaseline = "middle";
+	ctx.fillStyle = UI_THEME.text;
+	ctx.font = "bold 16px " + UI_THEME.font;
+	ctx.fillText("陆行鸟竞赛", canvas.width / 2, panelY + 23);
+	ctx.fillStyle = UI_THEME.muted;
+	ctx.font = "10px " + UI_THEME.font;
+	ctx.fillText(chocoboRace.phase === "ready" ? "准备起跑" : (chocoboRace.finished ? "比赛结束 · 最终排名" : "自动比赛中 · 请观赛"), canvas.width / 2, panelY + 41);
+
+	var sheet = resources.images.chocoboRaceSheet;
+	// The dirt course begins at y=192; keep every lane inside that surface.
+	var trackX = 0, trackWidth = canvas.width, laneTop = 200, laneHeight = 27;
+	var names = ["黄", "白", "粉", "蓝", "绿", "黑", "金", "棕"];
+	var renderOrder = chocoboRace.tracers.map(function (racer, index) {
+		return { index: index };
+	}).sort(function (left, right) {
+		// Lower lanes are closer to the camera and must be drawn later.
+		return left.index - right.index;
+	});
+	ctx.font = "10px " + UI_THEME.font;
+	for (var index = 0; index < 8; index++) {
+		var laneY = laneTop + index * laneHeight;
+		ctx.fillStyle = index % 2 ? "rgba(255,255,255,0.12)" : "rgba(71,42,24,0.16)";
+		ctx.fillRect(0, laneY - 12, canvas.width, laneHeight);
+		ctx.fillStyle = UI_THEME.text;
+		ctx.textAlign = "left";
+		ctx.fillText(names[index], 10, laneY + 3);
+		ctx.strokeStyle = "rgba(77,43,22,0.45)";
+		ctx.beginPath();
+		ctx.moveTo(0, laneY + 12);
+		ctx.lineTo(canvas.width, laneY + 12);
+		ctx.stroke();
+	}
+	if (sheet.ready) {
+		renderOrder.forEach(function (entry) {
+			var racer = chocoboRace.tracers[entry.index];
+			var racerY = laneTop + entry.index * laneHeight;
+			var racerX = 50 + racer.progress * chocoboRace.finishWorldX - chocoboRace.cameraX;
+			// Larger racers may overlap; the lower lane is drawn last for depth.
+			// Draw the footprint immediately before the racer so the track remains
+			// behind the entire character layer and never hides the sprite.
+			renderer.groundShadow(racerX + 3, racerY + 9, 44, 7, 0.34);
+			drawRaceChocobo(sheet.image, entry.index, racer.frame,
+				racerX,
+				// The source frame has transparent padding below the body; lift the
+				// draw box so the visible feet sit on the lane's ground line.
+				racerY - 33, 50, 50, racer.status === "celebrating" || racer.status === "stopped" ? 0 : 2);
+		});
+	}
+	ctx.strokeStyle = UI_THEME.accent;
+	ctx.setLineDash([3, 3]);
+	ctx.beginPath();
+	var finishX = 50 + chocoboRace.finishWorldX - chocoboRace.cameraX;
+	ctx.moveTo(finishX, laneTop - 14);
+	ctx.lineTo(finishX, laneTop + 7 * laneHeight + 15);
+	ctx.stroke();
+	ctx.setLineDash([]);
+	if (finishX > -20 && finishX < canvas.width + 20) {
+		ctx.fillStyle = "#5d3825";
+		ctx.fillRect(finishX - 5, laneTop - 18, 5, 8 * laneHeight + 30);
+		ctx.fillRect(finishX + 42, laneTop - 18, 5, 8 * laneHeight + 30);
+		ctx.fillStyle = "#fff1bd";
+		ctx.fillRect(finishX, laneTop - 28, 42, 8);
+		for (var flagRow = 0; flagRow < 2; flagRow++) {
+			for (var flagColumn = 0; flagColumn < 6; flagColumn++) {
+				ctx.fillStyle = (flagRow + flagColumn) % 2 ? "#e65f52" : "#fff1bd";
+				ctx.fillRect(finishX + flagColumn * 7, laneTop - 28 + flagRow * 4, 7, 4);
+			}
+		}
+		ctx.fillStyle = "#70462a";
+		ctx.fillRect(finishX - 12, laneTop + 7 * laneHeight + 20, 66, 5);
+	}
+	if (chocoboRace.finished) {
+		drawChocoboResults(sheet, names, panelX, panelY, panelWidth, panelHeight);
+	}
+	if (chocoboRace.phase === "ready") {
+		var count = Math.max(1, Math.ceil(chocoboRace.countdown));
+		ctx.fillStyle = "#fff1bd";
+		ctx.font = "bold 56px " + UI_THEME.font;
+		ctx.textAlign = "center";
+		ctx.fillText(count, canvas.width / 2, canvas.height / 2);
+	}
+	ctx.fillStyle = UI_THEME.muted;
+	ctx.font = "10px " + UI_THEME.font;
+	ctx.fillText("ESC 或点击右下角关闭", canvas.width / 2, canvas.height - 12);
+}
+
+function drawChocoboResults(sheet, names, panelX, panelY, panelWidth, panelHeight) {
+	ctx.fillStyle = "rgba(21, 15, 17, 0.82)";
+	ctx.fillRect(panelX + 8, panelY + 58, panelWidth - 16, panelHeight - 82);
+	ctx.textAlign = "center";
+	ctx.fillStyle = UI_THEME.accent;
+	ctx.font = "bold 14px " + UI_THEME.font;
+	var podium = [
+		{ rank: 1, x: canvas.width / 2, top: panelY + 132, width: 72, height: 82, color: "#e7b84e" },
+		{ rank: 2, x: canvas.width / 2 - 76, top: panelY + 150, width: 66, height: 64, color: "#b9c5d0" },
+		{ rank: 3, x: canvas.width / 2 + 76, top: panelY + 162, width: 66, height: 52, color: "#bb8056" }
+	];
+	podium.forEach(function (place) {
+		var racerIndex = chocoboRace.ranking[place.rank - 1];
+		if (racerIndex == null) return;
+		ctx.fillStyle = place.color;
+		ctx.fillRect(place.x - place.width / 2, place.top, place.width, place.height);
+		ctx.fillStyle = "#302225";
+		ctx.fillRect(place.x - place.width / 2, place.top, place.width, 4);
+		ctx.fillStyle = "#fff1bd";
+		ctx.font = "bold 20px " + UI_THEME.font;
+		ctx.fillText(String(place.rank), place.x, place.top + 26);
+		if (sheet.ready) {
+			drawRaceChocobo(sheet.image, racerIndex, 1,
+				place.x - 24, place.top - 46, 46, 46, 0);
+		}
+		ctx.fillStyle = UI_THEME.text;
+		ctx.font = "10px " + UI_THEME.font;
+		ctx.fillText(names[racerIndex] + "色", place.x, place.top + place.height + 13);
+	});
+	ctx.textAlign = "left";
+	ctx.font = "11px " + UI_THEME.font;
+	ctx.fillStyle = UI_THEME.text;
+	chocoboRace.ranking.forEach(function (racerIndex, rank) {
+		ctx.fillStyle = rank < 3 ? UI_THEME.accent : UI_THEME.muted;
+		var racerTime = chocoboRace.tracers[racerIndex].finishTime;
+		ctx.fillText((rank + 1) + ". " + names[racerIndex] + "色陆行鸟  " + formatRaceTime(racerTime), panelX + 30, panelY + 272 + rank * 18);
+	});
+}
+
+function formatRaceTime(seconds) {
+	var milliseconds = Math.floor((seconds % 1) * 1000);
+	var minutes = Math.floor(seconds / 60);
+	var remainingSeconds = Math.floor(seconds % 60);
+	return minutes + ":" + String(remainingSeconds).padStart(2, "0") + "." + String(milliseconds).padStart(3, "0");
+}
+
+function drawChocoboSelection() {
+	var horizonY = 126;
+	var startY = 374;
+	var vanishingX = canvas.width / 2;
+	var roadBottom = canvas.height;
+	var roadTopY = horizonY + 28;
+	var roadTopLeft = vanishingX - 34;
+	var roadTopRight = vanishingX + 34;
+	function roadEdgeAt(y, side) {
+		var depth = Math.max(0, Math.min(1, (y - roadTopY) / (roadBottom - roadTopY)));
+		var top = side === "left" ? roadTopLeft : roadTopRight;
+		var bottom = side === "left" ? 0 : canvas.width;
+		return top + (bottom - top) * depth;
+	}
+	ctx.imageSmoothingEnabled = false;
+	ctx.fillStyle = "#62b5ce";
+	ctx.fillRect(0, 0, canvas.width, horizonY);
+	ctx.fillStyle = "#dcebd5";
+	ctx.fillRect(0, 80, canvas.width, 8);
+	// Layered scenery keeps the selection view from feeling like an empty stage.
+	for (var cloud = -80; cloud < canvas.width + 100; cloud += 150) {
+		ctx.fillStyle = "#eaf3dc";
+		ctx.fillRect(cloud + 12, 28, 44, 5);
+		ctx.fillRect(cloud + 5, 33, 58, 6);
+		ctx.fillRect(cloud, 39, 74, 6);
+		ctx.fillStyle = "#c9e4d8";
+		ctx.fillRect(cloud + 8, 45, 18, 3);
+		ctx.fillRect(cloud + 48, 45, 16, 3);
+		ctx.fillStyle = "#f7f5dc";
+		ctx.fillRect(cloud + 18, 29, 8, 2);
+		ctx.fillRect(cloud + 34, 34, 12, 2);
+	}
+	ctx.fillStyle = "#476f7d";
+	for (var mountain = -120; mountain < canvas.width + 180; mountain += 160) {
+		ctx.fillRect(mountain + 50, 94, 64, 32);
+		ctx.fillRect(mountain + 30, 104, 104, 22);
+		ctx.fillStyle = "#5b8790";
+		ctx.fillRect(mountain + 66, 98, 18, 3);
+		ctx.fillRect(mountain + 42, 112, 24, 3);
+		ctx.fillRect(mountain + 91, 106, 14, 3);
+		ctx.fillStyle = "#3c6572";
+		ctx.fillRect(mountain + 55, 108, 8, 3);
+		ctx.fillRect(mountain + 78, 114, 12, 3);
+		ctx.fillStyle = "#476f7d";
+	}
+	ctx.fillStyle = "#6da379";
+	ctx.fillRect(0, horizonY, canvas.width, 28);
+	for (var shrub = 12; shrub < canvas.width; shrub += 48) {
+		ctx.fillStyle = "#3d7659";
+		ctx.fillRect(shrub, horizonY + 8, 20, 8);
+		ctx.fillRect(shrub + 3, horizonY + 5, 14, 5);
+		ctx.fillStyle = "#69a16b";
+		ctx.fillRect(shrub + 5, horizonY + 4, 5, 4);
+		ctx.fillRect(shrub + 13, horizonY + 7, 4, 3);
+	}
+	// A prominent finish palace anchors the far end of the perspective course.
+	var distantFinishY = horizonY - 2;
+	var finishWidth = 116;
+	var finishLeft = vanishingX - finishWidth / 2;
+	ctx.save();
+	// Scale the finish structure around the vanishing point so it reads as
+	// distant instead of competing with the foreground starting line.
+	ctx.translate(vanishingX, distantFinishY);
+	ctx.scale(0.7, 0.7);
+	ctx.translate(-vanishingX, -distantFinishY);
+	ctx.lineJoin = "round";
+	ctx.lineWidth = 4;
+	ctx.strokeStyle = "#171113";
+	ctx.fillStyle = "#6a4028";
+	ctx.beginPath();
+	ctx.roundRect(finishLeft - 10, distantFinishY + 18, 20, 82, 5);
+	ctx.roundRect(finishLeft + finishWidth - 10, distantFinishY + 18, 20, 82, 5);
+	ctx.fill();
+	ctx.stroke();
+	ctx.fillStyle = "#b9783f";
+	ctx.fillRect(finishLeft - 4, distantFinishY + 25, 8, 66);
+	ctx.fillRect(finishLeft + finishWidth - 4, distantFinishY + 25, 8, 66);
+	ctx.strokeStyle = "#171113";
+	ctx.fillStyle = "#f1d27c";
+	ctx.beginPath();
+	ctx.roundRect(finishLeft - 2, distantFinishY + 10, finishWidth + 4, 24, 5);
+	ctx.fill();
+	ctx.stroke();
+	ctx.fillStyle = "#e75c51";
+	ctx.fillRect(finishLeft + 8, distantFinishY + 14, finishWidth - 16, 12);
+	for (var finishFlag = 0; finishFlag < 7; finishFlag++) {
+		ctx.fillStyle = finishFlag % 2 ? "#fff0b5" : "#c84349";
+		ctx.fillRect(finishLeft + 10 + finishFlag * 14, distantFinishY + 14, 14, 6);
+		ctx.fillStyle = finishFlag % 2 ? "#c84349" : "#fff0b5";
+		ctx.fillRect(finishLeft + 10 + finishFlag * 14, distantFinishY + 20, 14, 6);
+	}
+	ctx.fillStyle = "#f6d36a";
+	ctx.beginPath();
+	ctx.arc(vanishingX, distantFinishY + 2, 15, 0, Math.PI * 2);
+	ctx.fill();
+	ctx.stroke();
+	ctx.fillStyle = "#fff1bd";
+	ctx.beginPath();
+	ctx.arc(vanishingX, distantFinishY + 2, 8, 0, Math.PI * 2);
+	ctx.fill();
+	ctx.stroke();
+	ctx.fillStyle = "#d8b45e";
+	ctx.fillRect(finishLeft - 27, distantFinishY + 2, 12, 42);
+	ctx.fillRect(finishLeft + finishWidth + 15, distantFinishY + 2, 12, 42);
+	ctx.strokeStyle = "#171113";
+	ctx.strokeRect(finishLeft - 27, distantFinishY + 2, 12, 42);
+	ctx.strokeRect(finishLeft + finishWidth + 15, distantFinishY + 2, 12, 42);
+	ctx.fillStyle = "#e65c52";
+	ctx.fillRect(finishLeft - 35, distantFinishY + 3, 8, 27);
+	ctx.fillRect(finishLeft + finishWidth + 27, distantFinishY + 3, 8, 27);
+	ctx.fillStyle = "#fff0b5";
+	ctx.fillRect(finishLeft - 35, distantFinishY + 11, 8, 8);
+	ctx.fillRect(finishLeft + finishWidth + 27, distantFinishY + 11, 8, 8);
+	ctx.fillStyle = "#fff0b5";
+	ctx.fillRect(finishLeft + 18, distantFinishY + 94, finishWidth - 36, 5);
+	ctx.restore();
+	ctx.fillStyle = "#8b5e3c";
+	ctx.fillRect(0, horizonY + 28, canvas.width, roadBottom - horizonY - 28);
+	// The course is a single perspective fan, not eight separate columns.
+	ctx.fillStyle = "#c99655";
+	ctx.beginPath();
+	ctx.moveTo(0, roadBottom);
+	ctx.lineTo(canvas.width, roadBottom);
+	ctx.lineTo(roadTopRight, roadTopY);
+	ctx.lineTo(roadTopLeft, roadTopY);
+	ctx.closePath();
+	ctx.fill();
+	ctx.fillStyle = "#b47b48";
+	for (var trackMark = 0; trackMark < 7; trackMark++) {
+		var markY = roadTopY + 25 + trackMark * 38;
+		var markLeft = roadEdgeAt(markY, "left") + 8;
+		var markRight = roadEdgeAt(markY, "right") - 8;
+		ctx.fillRect(markLeft, markY, markRight - markLeft, 3);
+	}
+	// Side spectator stands and bunting frame the course without crossing the birds.
+	ctx.fillStyle = "#6b412c";
+	ctx.fillRect(0, horizonY + 42, 44, 5);
+	ctx.fillRect(canvas.width - 44, horizonY + 42, 44, 5);
+	for (var stand = 0; stand < 5; stand++) {
+		ctx.fillStyle = stand % 2 ? "#e65c52" : "#f3d580";
+		ctx.fillRect(4 + stand * 9, horizonY + 48, 7, 8);
+		ctx.fillRect(canvas.width - 11 - stand * 9, horizonY + 48, 7, 8);
+	}
+	ctx.fillStyle = "#e0b267";
+	ctx.fillRect(0, startY + 28, canvas.width, 8);
+	ctx.fillStyle = "#6b412c";
+	ctx.fillRect(0, startY + 36, canvas.width, 5);
+	// Eight lane separators converge toward the distant center.
+	for (var lane = 0; lane <= 8; lane++) {
+		var bottomX = lane * canvas.width / 8;
+		ctx.strokeStyle = lane === 0 || lane === 8 ? "#5a3929" : "#e2b66a";
+		ctx.lineWidth = lane === 0 || lane === 8 ? 4 : 2;
+		ctx.beginPath();
+		ctx.moveTo(bottomX, roadBottom);
+		ctx.lineTo(roadTopLeft + lane * (roadTopRight - roadTopLeft) / 8, roadTopY);
+		ctx.stroke();
+	}
+	// Small distant posts make the depth direction readable.
+	for (var post = 0; post < 7; post++) {
+		var postT = post / 7;
+		var postY = horizonY + 34 + postT * (startY - horizonY - 48);
+		var postYEdgeLeft = roadEdgeAt(postY, "left");
+		var postYEdgeRight = roadEdgeAt(postY, "right");
+		var postSize = 2 + Math.round(postT * 3);
+		var postHeight = 7 + Math.round(postT * 9);
+		ctx.fillStyle = "#5b3827";
+		ctx.fillRect(postYEdgeLeft - postSize - 4, postY, postSize, postHeight);
+		ctx.fillRect(postYEdgeRight + 4, postY, postSize, postHeight);
+	}
+	// Trees, fence rails, and banners follow the same perspective edges.
+	for (var scenery = 0; scenery < 6; scenery++) {
+		var sceneryT = 0.12 + scenery * 0.15;
+		var sceneryY = roadTopY + sceneryT * (startY - roadTopY);
+		var treeVariants = [0.82, 1.18, 0.68, 1.04, 0.76, 1.27];
+		var sceneryScale = (0.35 + sceneryT * 0.8) * treeVariants[scenery];
+		var leftEdge = roadEdgeAt(sceneryY, "left");
+		var rightEdge = roadEdgeAt(sceneryY, "right");
+		var treeWidth = Math.max(14, Math.round(44 * sceneryScale));
+		var treeHeight = Math.max(24, Math.round(76 * sceneryScale));
+		var trunkWidth = Math.max(2, Math.round(treeWidth * (0.18 + (scenery % 3) * 0.04)));
+		var leftTreeX = leftEdge - 30 - treeWidth / 2 - (scenery % 2) * 5;
+		var rightTreeX = rightEdge + 30 + ((scenery + 1) % 2) * 7;
+		var crownY = sceneryY - treeHeight - treeWidth;
+		var crownHeight = Math.max(7, treeWidth - 3 - (scenery % 3) * 2);
+		var darkLeaves = scenery % 2 ? "#285b4d" : "#2f6654";
+		var lightLeaves = scenery % 3 ? "#4c9165" : "#5ca46b";
+		ctx.fillStyle = "#4b3025";
+		ctx.fillRect(leftTreeX + treeWidth / 2 - trunkWidth / 2, sceneryY - treeHeight, trunkWidth, treeHeight);
+		ctx.fillRect(rightTreeX + treeWidth / 2 - trunkWidth / 2, sceneryY - treeHeight, trunkWidth, treeHeight);
+		ctx.fillStyle = darkLeaves;
+		ctx.fillRect(leftTreeX, crownY + 5, treeWidth, crownHeight);
+		ctx.fillRect(rightTreeX, crownY + 5, treeWidth, crownHeight);
+		ctx.fillRect(leftTreeX + Math.round(treeWidth * 0.18), crownY, Math.max(4, Math.round(treeWidth * 0.55)), 7 + scenery % 3);
+		ctx.fillRect(rightTreeX + Math.round(treeWidth * 0.18), crownY, Math.max(4, Math.round(treeWidth * 0.55)), 7 + (scenery + 1) % 3);
+		ctx.fillRect(leftTreeX - Math.round(treeWidth * 0.18), crownY + Math.round(treeWidth * 0.35), Math.max(4, Math.round(treeWidth * 0.3)), Math.max(5, Math.round(treeWidth * 0.4)));
+		ctx.fillRect(leftTreeX + Math.round(treeWidth * 0.78), crownY + Math.round(treeWidth * 0.3), Math.max(4, Math.round(treeWidth * 0.28)), Math.max(5, Math.round(treeWidth * 0.45)));
+		ctx.fillRect(rightTreeX - Math.round(treeWidth * 0.12), crownY + Math.round(treeWidth * 0.28), Math.max(4, Math.round(treeWidth * 0.3)), Math.max(5, Math.round(treeWidth * 0.42)));
+		ctx.fillRect(rightTreeX + Math.round(treeWidth * 0.78), crownY + Math.round(treeWidth * 0.38), Math.max(4, Math.round(treeWidth * 0.3)), Math.max(5, Math.round(treeWidth * 0.35)));
+		ctx.fillStyle = lightLeaves;
+		ctx.fillRect(leftTreeX + 2 + (scenery % 3), crownY + 3, Math.max(2, Math.round(treeWidth * 0.25)), 3);
+		ctx.fillRect(leftTreeX + Math.round(treeWidth * 0.6), crownY + 9, Math.max(2, Math.round(treeWidth * 0.2)), 3);
+		ctx.fillRect(rightTreeX + 3, crownY + 4 + (scenery % 2), Math.max(2, Math.round(treeWidth * 0.22)), 3);
+		ctx.fillRect(rightTreeX + Math.round(treeWidth * 0.62), crownY + 8, Math.max(2, Math.round(treeWidth * 0.18)), 3);
+		ctx.fillRect(leftTreeX + Math.round(treeWidth * 0.12), crownY + Math.round(treeWidth * 0.42), Math.max(3, Math.round(treeWidth * 0.2)), 4);
+		ctx.fillRect(leftTreeX + Math.round(treeWidth * 0.72), crownY + Math.round(treeWidth * 0.55), Math.max(3, Math.round(treeWidth * 0.18)), 4);
+		ctx.fillRect(rightTreeX + Math.round(treeWidth * 0.18), crownY + Math.round(treeWidth * 0.5), Math.max(3, Math.round(treeWidth * 0.2)), 4);
+		ctx.fillRect(rightTreeX + Math.round(treeWidth * 0.68), crownY + Math.round(treeWidth * 0.3), Math.max(3, Math.round(treeWidth * 0.18)), 4);
+		var railY = sceneryY + 4;
+		ctx.fillStyle = "#70462a";
+		ctx.fillRect(leftEdge - 22 - treeWidth, railY, Math.max(4, treeWidth * 2), Math.max(2, sceneryScale * 3));
+		ctx.fillRect(rightEdge + 22, railY, Math.max(4, treeWidth * 2), Math.max(2, sceneryScale * 3));
+		if (scenery % 2 === 0) {
+			ctx.fillStyle = "#e65c52";
+			ctx.fillRect(leftEdge - 18 - treeWidth, sceneryY - treeHeight - treeWidth - 8, Math.max(4, treeWidth), Math.max(4, treeWidth / 2));
+			ctx.fillRect(rightEdge + 18, sceneryY - treeHeight - treeWidth - 8, Math.max(4, treeWidth), Math.max(4, treeWidth / 2));
+		}
+	}
+	ctx.textAlign = "center";
+	ctx.textBaseline = "middle";
+	ctx.fillStyle = UI_THEME.text;
+	ctx.font = "bold 17px " + UI_THEME.font;
+	ctx.fillText("选择你的陆行鸟", canvas.width / 2, 24);
+	ctx.fillStyle = UI_THEME.muted;
+	ctx.font = "10px " + UI_THEME.font;
+	ctx.fillText("←→ 选择 · Enter 开始比赛 · ESC 返回", canvas.width / 2, 43);
+	var sheet = resources.images.chocoboRaceSheet;
+	var names = ["黄", "白", "粉", "蓝", "绿", "黑", "金", "棕"];
+	var startLeft = roadEdgeAt(startY, "left");
+	var startRight = roadEdgeAt(startY, "right");
+	var startLaneWidth = (startRight - startLeft) / 8;
+	ctx.fillStyle = "#f0c879";
+	ctx.fillRect(startLeft, startY, startRight - startLeft, 7);
+	ctx.fillStyle = "#593528";
+	ctx.fillRect(startLeft, startY + 7, startRight - startLeft, 4);
+	for (var index = 0; index < 8; index++) {
+		var laneX = Math.round(startLeft + (index + 0.5) * startLaneWidth);
+		var size = 50;
+		var birdY = startY - 44;
+		ctx.fillStyle = index === chocoboRace.selectedIndex ? "rgba(255,241,189,0.3)" : "rgba(42,33,27,0.12)";
+		ctx.fillRect(laneX - 25, startY - 16, 50, 32);
+		ctx.fillStyle = UI_THEME.text;
+		ctx.textAlign = "center";
+		ctx.font = index === chocoboRace.selectedIndex ? "bold 15px Arial, sans-serif" : "12px Arial, sans-serif";
+		ctx.fillText(names[index], laneX, startY + 30);
+		if (index === chocoboRace.selectedIndex) {
+			ctx.save();
+			ctx.fillStyle = "#ffffff";
+			ctx.strokeStyle = "#171113";
+			ctx.lineWidth = 3;
+			ctx.font = "bold 24px Arial, sans-serif";
+			ctx.textAlign = "center";
+			ctx.textBaseline = "middle";
+			ctx.strokeText("▼", laneX, startY - 58);
+			ctx.fillText("▼", laneX, startY - 58);
+			ctx.restore();
+		}
+		if (sheet.ready) {
+			var frame = index === chocoboRace.selectedIndex && chocoboRace.previewTimer > 0 ? Math.floor(chocoboRace.elapsed * 8 + index) % 3 : 1;
+			drawRaceChocobo(sheet.image, index, frame, laneX - size / 2, birdY, size, size, 3);
+		}
+	}
+	ctx.textAlign = "center";
+	ctx.fillStyle = UI_THEME.muted;
+	ctx.fillText("选择后，选中的陆行鸟会向前预跑两步", canvas.width / 2, canvas.height - 14);
+}
+
+function drawRaceBackground() {
+	var farOffset = Math.floor(chocoboRace.cameraX * 0.18);
+	var nearOffset = Math.floor(chocoboRace.cameraX * 0.5);
+	ctx.imageSmoothingEnabled = false;
+	ctx.fillStyle = "#63b8d1";
+	ctx.fillRect(0, 0, canvas.width, canvas.height);
+	ctx.fillStyle = "#78c7d7";
+	ctx.fillRect(0, 54, canvas.width, 20);
+	ctx.fillStyle = "#a9dce0";
+	ctx.fillRect(0, 74, canvas.width, 14);
+	for (var cloud = -((farOffset * 2) % 150) - 80; cloud < canvas.width + 120; cloud += 150) {
+		ctx.fillStyle = "#eaf3dc";
+		ctx.fillRect(cloud + 12, 24, 42, 8);
+		ctx.fillRect(cloud, 32, 72, 8);
+		ctx.fillRect(cloud + 20, 40, 32, 5);
+		ctx.fillStyle = "#c8e5d5";
+		ctx.fillRect(cloud + 8, 40, 14, 5);
+		ctx.fillStyle = "#d7eadb";
+		ctx.fillRect(cloud + 24, 28, 18, 3);
+		ctx.fillRect(cloud + 48, 34, 16, 3);
+	}
+
+	for (var mountain = -((farOffset) % 180) - 180; mountain < canvas.width + 180; mountain += 180) {
+		ctx.fillStyle = "#477e8c";
+		ctx.fillRect(mountain + 48, 84, 84, 30);
+		ctx.fillRect(mountain + 32, 94, 116, 20);
+		ctx.fillRect(mountain + 16, 104, 148, 10);
+		ctx.fillStyle = "#d8e4cd";
+		ctx.fillRect(mountain + 72, 84, 20, 6);
+		ctx.fillRect(mountain + 64, 90, 36, 6);
+		ctx.fillStyle = "#386b79";
+		ctx.fillRect(mountain + 40, 100, 20, 4);
+		ctx.fillRect(mountain + 104, 94, 18, 5);
+		ctx.fillRect(mountain + 76, 108, 28, 4);
+		ctx.fillStyle = "#568d91";
+		ctx.fillRect(mountain + 24, 108, 14, 3);
+		ctx.fillRect(mountain + 124, 104, 18, 3);
+	}
+	for (var tree = -((farOffset * 2) % 96) - 50; tree < canvas.width + 50; tree += 96) {
+		ctx.fillStyle = "#68452c";
+		ctx.fillRect(tree + 18, 108, 8, 24);
+		ctx.fillStyle = "#4a3025";
+		ctx.fillRect(tree + 18, 112, 3, 18);
+		ctx.fillStyle = "#3d8760";
+		ctx.fillRect(tree + 6, 96, 8, 5);
+		ctx.fillRect(tree + 28, 102, 9, 5);
+		ctx.fillStyle = "#2d6656";
+		ctx.fillRect(tree + 8, 92, 28, 20);
+		ctx.fillRect(tree + 2, 100, 40, 12);
+		ctx.fillStyle = "#3d8760";
+		ctx.fillRect(tree + 14, 86, 16, 8);
+	}
+	ctx.fillStyle = "#83b84e";
+	ctx.fillRect(0, 122, canvas.width, 20);
+	ctx.fillStyle = "#c99552";
+	ctx.fillRect(0, 142, canvas.width, 18);
+	ctx.fillStyle = "#e0b66a";
+	ctx.fillRect(0, 160, canvas.width, 8);
+	ctx.fillStyle = "#292126";
+	ctx.fillRect(0, 188, canvas.width, 4);
+	for (var post = -(nearOffset % 72) - 40; post < canvas.width + 40; post += 72) {
+		pixelOutlineBlock(post - 2, 114, 10, 56, "#241f22");
+		ctx.fillStyle = "#70462a";
+		ctx.fillRect(post, 116, 6, 52);
+		ctx.fillStyle = "#9d6337";
+		ctx.fillRect(post + 2, 116, 3, 52);
+		ctx.fillStyle = "#583a29";
+		ctx.fillRect(post + 1, 124, 2, 10);
+		ctx.fillRect(post + 1, 143, 2, 14);
+		ctx.fillStyle = "#b97942";
+		ctx.fillRect(post + 5, 119, 1, 18);
+		ctx.fillRect(post - 12, 128, 30, 5);
+		ctx.fillRect(post - 12, 150, 30, 5);
+	}
+	ctx.fillStyle = "#5d9b42";
+	ctx.fillRect(0, 168, canvas.width, 8);
+	ctx.fillStyle = "#78aa45";
+	ctx.fillRect(0, 176, canvas.width, 8);
+	ctx.fillStyle = "#b77a43";
+	ctx.fillRect(0, 184, canvas.width, 8);
+	ctx.fillStyle = "#d19a55";
+	ctx.fillRect(0, 192, canvas.width, 220);
+	for (var texture = -((nearOffset * 2) % 58) - 58; texture < canvas.width + 58; texture += 58) {
+		ctx.fillStyle = "#c18447";
+		ctx.fillRect(texture + 4, 214, 18, 3);
+		ctx.fillRect(texture + 30, 246, 12, 3);
+		ctx.fillRect(texture + 12, 286, 24, 3);
+		ctx.fillRect(texture + 38, 330, 14, 3);
+		ctx.fillStyle = "#e2b66a";
+		ctx.fillRect(texture + 20, 228, 9, 2);
+		ctx.fillRect(texture + 2, 310, 13, 2);
+	}
+	ctx.fillStyle = "#292126";
+	ctx.fillRect(0, 188, canvas.width, 4);
+	ctx.fillRect(0, 408, canvas.width, 4);
+}
+
+function pixelOutlineBlock(x, y, width, height, outline) {
+	ctx.fillStyle = outline;
+	ctx.fillRect(Math.floor(x), Math.floor(y), Math.ceil(width), Math.ceil(height));
+}
+
+function drawRaceChocobo(image, colorIndex, frame, x, y, width, height, directionRow) {
+	var sourceWidth = image.width / 12;
+	var sourceHeight = image.height / 8;
+	var colorGroup = Math.floor(colorIndex / 4);
+	var colorColumn = colorIndex % 4;
+	ctx.imageSmoothingEnabled = false;
+	// Use the right-facing row for a side-on race while cycling its three frames.
+	var row = directionRow == null ? 2 : directionRow;
+	// The upper four color groups have four transparent pixels below their
+	// source cells; compensate so every color's visible feet share one baseline.
+	var alignedY = y + (colorGroup === 0 ? 4 : 0);
+	// The source cells also have asymmetric side padding. These offsets align
+	// each color's visible body center with its assigned lane center.
+	var horizontalOffsets = [3, 1, -1, -4];
+	var alignedX = x + horizontalOffsets[colorColumn] * width / sourceWidth;
+	ctx.drawImage(image, (colorColumn * 3 + frame) * sourceWidth, (colorGroup * 4 + row) * sourceHeight,
+		sourceWidth, sourceHeight, alignedX, alignedY, width, height);
+}
+
+function isPointInChocoboRaceClose(x, y) {
+	return x >= canvas.width - 100 && y >= canvas.height - 48;
 }
 
 function drawMogWindow() {
