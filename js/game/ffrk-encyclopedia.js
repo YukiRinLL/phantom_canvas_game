@@ -19,6 +19,7 @@
     tabStatus: { bosses: createStatus(), monsters: createStatus(), characters: createStatus() },
     imageMapStatus: createStatus(),
     imageMap: Object.create(null),
+    normImageIndex: {},
     images: Object.create(null)
   };
   var tabs = ["characters", "bosses", "monsters"];
@@ -75,9 +76,34 @@
     image.src = record.imageFile;
   }
 
+  // Secondary lookup: series + normalized base name -> image, so multi-phase
+  // variants (e.g. "(1段階)"/"(2段階)") can share the artwork of the base boss
+  // when the source pack only ships one image for the whole family.
+  function buildNormalizedImageIndex(imageMap) {
+    var index = {};
+    Object.keys(imageMap).forEach(function (key) {
+      var first = key.indexOf("|"), second = key.indexOf("|", first + 1);
+      if (first < 0 || second < 0) return;
+      var type = key.slice(0, first);
+      var series = key.slice(first + 1, second);
+      var name = key.slice(second + 1);
+      var bucketKey = type + "|" + series;
+      var bucket = index[bucketKey] || (index[bucketKey] = {});
+      var norm = normalizeEntityName(name);
+      if (!bucket[norm]) bucket[norm] = imageMap[key];
+    });
+    return index;
+  }
+
   function attachImagesFor(type, imageMap) {
     state.records[type].forEach(function (record) {
-      record.imageFile = imageMap[type + "|" + record.series + "|" + record.name] || "";
+      var exact = imageMap[type + "|" + record.series + "|" + record.name];
+      var shared = null;
+      if (!exact) {
+        var seriesBucket = state.normImageIndex[type + "|" + record.series];
+        if (seriesBucket) shared = seriesBucket[normalizeEntityName(record.name)] || null;
+      }
+      record.imageFile = exact || shared || "";
     });
   }
 
@@ -116,6 +142,7 @@
       })
       .then(function (imageMap) {
         state.imageMap = imageMap;
+        state.normImageIndex = buildNormalizedImageIndex(imageMap);
         tabs.forEach(function (type) {
           if (state.tabStatus[type].loaded) attachImagesFor(type, imageMap);
         });
@@ -525,12 +552,19 @@
     if (!group) { ctx.fillStyle = "#d6cbe2"; ctx.fillText("没有匹配条目", panelX + 220, listY + 20); return; }
     state.variant = Math.min(state.variant, group.records.length - 1);
     if (isLargeEntity) {
-      var listImage = group.records[state.variant].imageFile && state.images[group.records[state.variant].imageFile];
-      if (group.records[state.variant].imageFile) loadImage(group.records[state.variant]);
+      var activeRecord = group.records[state.variant];
+      var listImage = activeRecord.imageFile && state.images[activeRecord.imageFile];
+      if (activeRecord.imageFile) loadImage(activeRecord);
       ctx.fillStyle = "#0d0a14";
       ctx.fillRect(listX, panelY + 46, listW, 94);
       if (listImage && listImage.complete && listImage.naturalWidth) {
         drawNativeImage(ctx, listImage, listX + 4, panelY + 50, listW - 8, 86);
+      } else if (!activeRecord.imageFile) {
+        ctx.fillStyle = "#5d5170";
+        ctx.font = "10px " + env.font;
+        ctx.textAlign = "center";
+        ctx.fillText("暂无图片", listX + listW / 2, panelY + 86);
+        ctx.textAlign = "left";
       }
     }
     var detailY = panelY + 46;
