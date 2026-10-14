@@ -1,10 +1,12 @@
 (function (root) {
   "use strict";
 
+  function createStatus() {
+    return { loaded: false, loading: false, error: "", progress: 0, promise: null };
+  }
+
   var state = {
     visible: false,
-    loading: true,
-    error: "",
     tab: "bosses",
     level: "categories",
     series: "FF1",
@@ -14,6 +16,8 @@
     variantMenu: false,
     actionScroll: 0,
     records: { bosses: [], monsters: [], characters: [] },
+    tabStatus: { bosses: createStatus(), monsters: createStatus(), characters: createStatus() },
+    imageMapStatus: createStatus(),
     imageMap: Object.create(null),
     images: Object.create(null)
   };
@@ -71,31 +75,109 @@
     image.src = record.imageFile;
   }
 
-  function attachImages(imageMap) {
-    state.imageMap = imageMap;
-    Object.keys(state.records).forEach(function (type) {
-      state.records[type].forEach(function (record) {
-        record.imageFile = imageMap[type + "|" + record.series + "|" + record.name] || "";
-      });
+  function attachImagesFor(type, imageMap) {
+    state.records[type].forEach(function (record) {
+      record.imageFile = imageMap[type + "|" + record.series + "|" + record.name] || "";
     });
   }
 
-  function load() {
-    Promise.all(Object.keys(fileMap).map(function (type) {
-      return fetch(fileMap[type]).then(function (response) {
-        if (!response.ok) throw new Error(fileMap[type] + " (" + response.status + ")");
-        return response.text();
-      }).then(function (text) { state.records[type] = parseCsv(text); });
-    })).then(function () {
-      return fetch("ffrk/entity-image-map.json").then(function (response) {
+  // Streams the response so the ~23 MB bosses.csv can report download progress.
+  // Falls back to response.text() when streaming is unavailable.
+  function readResponseWithProgress(response, onProgress) {
+    var total = Number(response.headers.get("content-length")) || 0;
+    if (!response.body || typeof response.body.getReader !== "function" ||
+        typeof Blob !== "function" || !total) {
+      return response.text();
+    }
+    var reader = response.body.getReader();
+    var received = 0;
+    var chunks = [];
+    function pump() {
+      return reader.read().then(function (result) {
+        if (result.done) return new Blob(chunks).text();
+        chunks.push(result.value);
+        received += result.value.length;
+        onProgress(Math.min(99, Math.round((received / total) * 100)));
+        return pump();
+      });
+    }
+    return pump();
+  }
+
+  function ensureImageMap() {
+    var status = state.imageMapStatus;
+    if (status.loaded) return Promise.resolve(state.imageMap);
+    if (status.loading) return status.promise;
+    status.loading = true;
+    status.promise = fetch("ffrk/entity-image-map.json")
+      .then(function (response) {
         if (!response.ok) throw new Error("ffrk/entity-image-map.json (" + response.status + ")");
         return response.json();
+      })
+      .then(function (imageMap) {
+        state.imageMap = imageMap;
+        tabs.forEach(function (type) {
+          if (state.tabStatus[type].loaded) attachImagesFor(type, imageMap);
+        });
+        status.loaded = true;
+        status.loading = false;
+        return imageMap;
+      })
+      .catch(function (error) {
+        // Missing images are non-fatal; data tabs remain usable without the map.
+        status.loading = false;
+        status.promise = null;
+        return Object.create(null);
       });
-    }).then(attachImages).then(function () {
-      state.loading = false;
-    }).catch(function (error) {
-      state.loading = false;
-      state.error = "百科数据加载失败: " + error.message;
+    return status.promise;
+  }
+
+  // Loads a single tab's CSV on demand; safe to call repeatedly.
+  function ensureData(type) {
+    var status = state.tabStatus[type];
+    if (status.loaded) return Promise.resolve(state.records[type]);
+    if (status.loading) return status.promise;
+    status.loading = true;
+    status.error = "";
+    status.progress = 0;
+    status.promise = fetch(fileMap[type])
+      .then(function (response) {
+        if (!response.ok) throw new Error(fileMap[type] + " (" + response.status + ")");
+        return readResponseWithProgress(response, function (percent) { status.progress = percent; });
+      })
+      .then(function (text) {
+        state.records[type] = parseCsv(text);
+        if (state.imageMapStatus.loaded) {
+          attachImagesFor(type, state.imageMap);
+        } else if (!state.imageMapStatus.loading) {
+          // Best-effort (re)try; success attaches images to every loaded tab.
+          ensureImageMap();
+        }
+        status.loaded = true;
+        status.loading = false;
+        status.progress = 100;
+        return state.records[type];
+      })
+      .catch(function (error) {
+        status.loading = false;
+        status.error = "数据加载失败: " + error.message + "（点击或按 Enter 重试）";
+        status.promise = null;
+        throw error;
+      });
+    return status.promise;
+  }
+
+  // Startup entry point: never blocks the game. Small datasets are prefetched
+  // during browser idle time; the large bosses.csv is scheduled last. If the
+  // user opens a tab earlier, ensureData() takes over immediately.
+  function scheduleBackgroundPrefetch() {
+    var schedule = root.requestIdleCallback || function (callback) {
+      return setTimeout(function () { callback({ didTimeout: false }); }, 1500);
+    };
+    schedule(function () {
+      ensureImageMap()
+        .then(function () { return Promise.all([ensureData("characters"), ensureData("monsters")]).catch(function () {}); })
+        .then(function () { return ensureData("bosses").catch(function () {}); });
     });
   }
 
@@ -129,7 +211,12 @@
     return result.replace(/[\s　]+/g, "").trim() || source.trim();
   }
 
-  function open() { state.visible = true; state.level = "categories"; state.selected = 0; state.variantMenu = false; }
+  function open() {
+    state.visible = true; state.level = "categories"; state.selected = 0; state.variantMenu = false;
+    // The categories menu needs no data; a tab's CSV is fetched only when entered.
+    // Warm the small image map ahead of time so images appear without extra wait.
+    ensureImageMap();
+  }
   function close() { state.visible = false; }
   function toggle() { state.visible ? close() : open(); }
 
@@ -149,6 +236,17 @@
     return state.tab === "bosses" || state.tab === "monsters";
   }
 
+  function enterTab(type) {
+    state.tab = type;
+    if (state.tab === "characters" && characterSeriesOptions.indexOf(state.series) < 0) state.series = characterSeriesOptions[0];
+    state.level = "records";
+    state.selected = 0;
+    state.variant = 0;
+    state.variantMenu = false;
+    ensureData(type).catch(function () {});
+    ensureImageMap();
+  }
+
   function handleClick(x, y) {
     if (!state.visible) return false;
     var panelX = state.level === "records" ? 8 : 18;
@@ -158,14 +256,17 @@
       for (var categoryIndex = 0; categoryIndex < tabs.length; categoryIndex++) {
         var categoryTop = categoryY + categoryIndex * 34;
         if (x >= categoryX && x <= categoryX + 168 && y >= categoryTop && y <= categoryTop + 26) {
-          state.tab = tabs[categoryIndex];
-          if (state.tab === "characters" && characterSeriesOptions.indexOf(state.series) < 0) state.series = characterSeriesOptions[0];
-          state.level = "records";
-          state.selected = 0;
+          enterTab(tabs[categoryIndex]);
           return true;
         }
       }
       return false;
+    }
+    var tabStatus = state.tabStatus[state.tab];
+    if (tabStatus.error) {
+      // Any click while an error is shown retries the request.
+      ensureData(state.tab).catch(function () {});
+      return true;
     }
     var tabY = panelY + 30;
     var detailX = panelX + 212;
@@ -212,9 +313,15 @@
     if (state.level === "categories") {
       if (input.consume(38)) state.selected = (state.selected + tabs.length - 1) % tabs.length;
       if (input.consume(40)) state.selected = (state.selected + 1) % tabs.length;
-      if (input.consume(13) || input.consume(32)) { state.tab = tabs[state.selected]; state.level = "records"; state.selected = 0; }
+      if (input.consume(13) || input.consume(32)) { enterTab(tabs[state.selected]); }
       return true;
     }
+    var activeStatus = state.tabStatus[state.tab];
+    if (activeStatus.error && (input.consume(13) || input.consume(32))) {
+      ensureData(state.tab).catch(function () {});
+      return true;
+    }
+    if (activeStatus.loading || activeStatus.error) return true;
     var records = activeRecords();
     var selectableSeries = currentSeriesOptions();
     var seriesIndex = selectableSeries.indexOf(state.series);
@@ -361,8 +468,25 @@
     ctx.fillStyle = "#f5d68d"; ctx.font = "bold 18px Arial"; ctx.fillText(state.series, panelX + panelW - 14, panelY + 9);
     ctx.fillStyle = "#d5a65b"; ctx.font = "9px " + env.font; ctx.fillText("◀  ▶  切换作品", panelX + panelW - 14, panelY + 30);
     ctx.textAlign = "left";
-    if (state.loading) { ctx.fillStyle = "#f4e7ca"; ctx.font = "14px " + env.font; ctx.fillText("正在读取 FFRK 资料...", panelX + 24, panelY + 60); return; }
-    if (state.error) { ctx.fillStyle = "#f28f8f"; ctx.fillText(state.error, panelX + 24, panelY + 60); return; }
+    var activeStatus = state.tabStatus[state.tab];
+    if (activeStatus.loading) {
+      ctx.fillStyle = "#f4e7ca"; ctx.font = "14px " + env.font;
+      ctx.fillText("正在读取 " + tabLabels[state.tab] + " 资料...", panelX + 24, panelY + 60);
+      if (activeStatus.progress > 0) {
+        var barX = panelX + 24, barY = panelY + 86, barW = 240;
+        ctx.fillStyle = "#171324"; ctx.fillRect(barX, barY, barW, 12);
+        ctx.fillStyle = "#d5a65b"; ctx.fillRect(barX, barY, Math.round(barW * activeStatus.progress / 100), 12);
+        ctx.strokeStyle = "#8f7fa3"; ctx.lineWidth = 1; ctx.strokeRect(barX, barY, barW, 12);
+        ctx.fillStyle = "#d6cbe2"; ctx.font = "10px " + env.font;
+        ctx.fillText(activeStatus.progress + "%", barX + barW + 10, barY);
+      }
+      return;
+    }
+    if (activeStatus.error) {
+      ctx.fillStyle = "#f28f8f"; ctx.font = "12px " + env.font;
+      text(ctx, activeStatus.error, panelX + 24, panelY + 60, panelW - 48, 16, 4);
+      return;
+    }
     var records = activeRecords(); state.selected = Math.min(state.selected, Math.max(0, records.length - 1));
     var isLargeEntity = state.tab === "bosses" || state.tab === "monsters";
     var listX = panelX + 10, listY = panelY + (isLargeEntity ? 148 : 46), listW = 190, rowH = 22;
@@ -504,6 +628,15 @@
     }
   }
 
-  root.PhantomFfrkEncyclopedia = { state: state, load: load, update: update, draw: draw, onKey: onKey, handleClick: handleClick, toggle: toggle };
+  root.PhantomFfrkEncyclopedia = {
+    state: state,
+    load: scheduleBackgroundPrefetch,
+    ensureData: ensureData,
+    update: update,
+    draw: draw,
+    onKey: onKey,
+    handleClick: handleClick,
+    toggle: toggle
+  };
   addEventListener("keydown", onKey, false);
 }(window));
